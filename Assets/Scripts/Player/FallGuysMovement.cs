@@ -293,7 +293,11 @@ public class FallGuysMovement : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        if (!isServer) return;
+        if (!isServer)
+        {
+            Debug.Log("[CLIENT] FixedUpdate called, but not server");
+            return;
+        }
 
         CheckGround();
 
@@ -343,7 +347,7 @@ public class FallGuysMovement : NetworkBehaviour
 
     private void ApplyMovement()
     {
-        if (isDiving) return;
+        //if (isDiving) return;
 
         Vector3 targetVelocity = serverMoveDirection * moveSpeed;
 

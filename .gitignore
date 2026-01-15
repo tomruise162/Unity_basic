@@ -1,0 +1,42 @@
+# Unity generated folders
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# Build artifacts
+Build/
+Builds/
+[Bb]uild/
+[Bb]uilds/
+
+# IDE and OS
+.vs/
+.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+*.csproj
+*.sln
+*.userprefs
+*.unityproj
+*.pidb
+*.suo
+*.tmp
+*.user
+*.userosscache
+*.sln.docstates
+
+# Unity cache
+obj/
+/Packages/manifest-temp.json
+
+# Crash and debug
+sysinfo.txt
+
+# Mirror generated codegen (if any)
+Assets/Mirror/Generated/*

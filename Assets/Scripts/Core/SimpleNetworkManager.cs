@@ -2,25 +2,17 @@ using UnityEngine;
 using Mirror;
 
 /// <summary>
-/// Custom NetworkManager giúp bạn hiểu rõ flow spawn player.
-/// 
-/// FLOW SPAWN:
-/// 1. User click "Host" hoặc "Client" trên HUD
-/// 2. NetworkManager.StartHost() hoặc StartClient() được gọi
-/// 3. Khi client connect thành công, Mirror tự động gọi NetworkClient.Ready() và NetworkClient.AddPlayer()
-/// 4. Server nhận request và gọi OnServerAddPlayer()
-/// 5. Server tạo player object và spawn cho client đó
-/// 6. Mirror tự động đồng bộ object tới tất cả clients
-/// 7. Trên local player, OnStartLocalPlayer() được gọi
+/// Custom NetworkManager with enhanced debugging to help diagnose spawn issues
 /// </summary>
 public class SimpleNetworkManager : NetworkManager
 {
-    // [SerializeField] private Transform spawnPoint;
-    // public Transform SpawnPoint => spawnPoint; // read-only property if you need it in code
-
     [Header("Spawn Settings")]
     [Tooltip("Cac vi tri spawn player, neu khong co se spawn tai Vector3.zero")]
     public Transform[] spawnPoints;
+
+    [Header("Debug Settings")]
+    [SerializeField] private bool showDebugLogs = true;
+    [SerializeField] private bool showDebugGizmos = true;
 
     public override void Awake()
     {
@@ -31,144 +23,259 @@ public class SimpleNetworkManager : NetworkManager
         }
 
         base.Awake();
+
+        // CRITICAL CHECKS
+        if (playerPrefab == null)
+        {
+            Debug.LogError("[SETUP ERROR] Player Prefab is not assigned in NetworkManager!");
+        }
+        else
+        {
+            DebugLog($"[SETUP] Player Prefab: {playerPrefab.name}");
+
+            // Verify prefab has required components
+            var netId = playerPrefab.GetComponent<NetworkIdentity>();
+            var rb = playerPrefab.GetComponent<Rigidbody>();
+            var renderer = playerPrefab.GetComponent<Renderer>();
+
+            if (netId == null) Debug.LogError("[SETUP ERROR] Player prefab missing NetworkIdentity!");
+            if (rb == null) Debug.LogError("[SETUP ERROR] Player prefab missing Rigidbody!");
+            if (renderer == null) Debug.LogWarning("[SETUP WARNING] Player prefab missing Renderer - you won't see it!");
+        }
+
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            Debug.LogWarning("[SETUP WARNING] No spawn points assigned! Players will spawn randomly.");
+        }
+        else
+        {
+            DebugLog($"[SETUP] {spawnPoints.Length} spawn points configured");
+        }
     }
 
     // =================================================================
     // SERVER EVENTS
     // =================================================================
 
-    /// <summary>
-    /// Gọi khi server bắt đầu (cả Host và Dedicated Server)
-    /// Đây là nơi tốt để spawn các object của game như coins, enemies, etc.
-    /// </summary>
     public override void OnStartServer()
     {
         base.OnStartServer();
-        Debug.Log("[SERVER] Server started!");
+        DebugLog("[SERVER] Server started!");
+        DebugLog($"[SERVER] Listening on: {networkAddress}");
     }
 
-    /// <summary>
-    /// Gọi khi server dừng
-    /// </summary>
     public override void OnStopServer()
     {
         base.OnStopServer();
-        Debug.Log("[SERVER] Server stopped!");
+        DebugLog("[SERVER] Server stopped!");
     }
 
-    /// <summary>
-    /// QUAN TRONG: Đây là nơi SERVER spawn player cho client.
-    /// 
-    /// Khi client gọi NetworkClient.AddPlayer(), message được gửi tới server,
-    /// và server gọi function này để tạo player object.
-    /// </summary>
-    /// <param name="conn">Connection của client đang request spawn</param>
     public override void OnServerAddPlayer(NetworkConnectionToClient conn)
     {
         // Bước 1: Xác định vị trí spawn
         Vector3 spawnPosition = GetSpawnPosition(conn.connectionId);
         Quaternion spawnRotation = Quaternion.identity;
 
-        Debug.Log($"[SERVER] Spawning player for connection {conn.connectionId} at {spawnPosition}");
+        DebugLog($"[SERVER] ========================================");
+        DebugLog($"[SERVER] Spawning player for ConnectionId: {conn.connectionId}");
+        DebugLog($"[SERVER] Spawn Position: {spawnPosition}");
+        DebugLog($"[SERVER] Player Prefab: {playerPrefab.name}");
 
         // Bước 2: SERVER tạo player object từ prefab
-        // playerPrefab là prefab được assign trong Inspector của NetworkManager
         GameObject playerObject = Instantiate(playerPrefab, spawnPosition, spawnRotation);
 
-        // Bước 3: SERVER spawn object và gán ownership cho connection này
-        // Sau bước này, Mirror sẽ TỰ ĐỘNG:
-        // - Tạo object tương tự trên tất cả connected clients
-        // - Đánh dấu object này thuộc về connection 'conn'
-        // - Gọi OnStartServer() trên server
-        // - Gọi OnStartClient() trên tất cả clients
-        // - Gọi OnStartLocalPlayer() CHỈ trên client sở hữu object này
+        // DEBUGGING: Make player more visible
+        var renderer = playerObject.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            // Random color for each player
+            renderer.material.color = new Color(
+                Random.Range(0.3f, 1f),
+                Random.Range(0.3f, 1f),
+                Random.Range(0.3f, 1f)
+            );
+            DebugLog($"[SERVER] Player renderer found and colored");
+        }
+        else
+        {
+            Debug.LogWarning($"[SERVER] Player has no renderer! You won't see it!");
+        }
+
+        // Verify components
+        var netId = playerObject.GetComponent<NetworkIdentity>();
+        var rb = playerObject.GetComponent<Rigidbody>();
+        DebugLog($"[SERVER] Components check:");
+        DebugLog($"  - NetworkIdentity: {(netId != null ? "✓" : "✗ MISSING")}");
+        DebugLog($"  - Rigidbody: {(rb != null ? "✓" : "✗ MISSING")}");
+        DebugLog($"  - Renderer: {(renderer != null ? "✓" : "✗ MISSING")}");
+
+        // Bước 3: SERVER spawn object và gán ownership
         NetworkServer.AddPlayerForConnection(conn, playerObject);
 
-        Debug.Log($"[SERVER] Player spawned successfully! NetId: {playerObject.GetComponent<NetworkIdentity>().netId}");
+        DebugLog($"[SERVER] Player spawned successfully! NetId: {netId?.netId}");
+        DebugLog($"[SERVER] Active players on server: {NetworkServer.connections.Count}");
+        DebugLog($"[SERVER] ========================================");
     }
 
-    /// <summary>
-    /// Tính toán vị trí spawn dựa trên connectionId
-    /// </summary>
     private Vector3 GetSpawnPosition(int connectionId)
     {
         if (spawnPoints == null || spawnPoints.Length == 0)
         {
-            // Spawn tại vị trí ngẫu nhiên nếu không có spawn points
-            return new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f));
+            // Spawn at random position with spacing
+            float angle = connectionId * 90f; // 90 degrees apart
+            float radius = 5f;
+            Vector3 offset = new Vector3(
+                Mathf.Cos(angle * Mathf.Deg2Rad) * radius,
+                1f,
+                Mathf.Sin(angle * Mathf.Deg2Rad) * radius
+            );
+
+            DebugLog($"[SERVER] No spawn points, using calculated position: {offset}");
+            return offset;
         }
 
         // Chọn spawn point theo round-robin
         int index = connectionId % spawnPoints.Length;
-        return spawnPoints[index].position;
+        Vector3 position = spawnPoints[index].position;
+
+        DebugLog($"[SERVER] Using spawn point [{index}]: {position}");
+        return position;
     }
 
-    /// <summary>
-    /// Gọi khi một client connect tới server
-    /// </summary>
     public override void OnServerConnect(NetworkConnectionToClient conn)
     {
         base.OnServerConnect(conn);
-        Debug.Log($"[SERVER] Client connected! ConnectionId: {conn.connectionId}");
+        DebugLog($"[SERVER] ✓ Client connected! ConnectionId: {conn.connectionId}");
+        DebugLog($"[SERVER] Total connections: {NetworkServer.connections.Count}");
     }
 
-    /// <summary>
-    /// Gọi khi một client disconnect khỏi server
-    /// Player object sẽ tự động bị destroy
-    /// </summary>
     public override void OnServerDisconnect(NetworkConnectionToClient conn)
     {
-        Debug.Log($"[SERVER] Client disconnected! ConnectionId: {conn.connectionId}");
-        base.OnServerDisconnect(conn); // Destroy player object
+        DebugLog($"[SERVER] ✗ Client disconnected! ConnectionId: {conn.connectionId}");
+        base.OnServerDisconnect(conn);
     }
 
     // =================================================================
     // CLIENT EVENTS
     // =================================================================
 
-    /// <summary>
-    /// Gọi khi client bắt đầu (bao gồm cả Host client)
-    /// </summary>
     public override void OnStartClient()
     {
         base.OnStartClient();
-        Debug.Log("[CLIENT] Client started!");
+        DebugLog("[CLIENT] Client started!");
     }
 
-    /// <summary>
-    /// Gọi khi client connect tới server thành công
-    /// Sau bước này, Mirror sẽ tự động gọi NetworkClient.Ready() 
-    /// và NetworkClient.AddPlayer() (nếu autoCreatePlayer = true)
-    /// </summary>
     public override void OnClientConnect()
     {
         base.OnClientConnect();
-        Debug.Log("[CLIENT] Connected to server!");
+        DebugLog("[CLIENT] ✓ Connected to server!");
+        DebugLog($"[CLIENT] Server address: {networkAddress}");
 
-        // Nếu autoCreatePlayer = true (mặc định), Mirror tự động gọi:
-        // NetworkClient.Ready();
-        // NetworkClient.AddPlayer();
-
-        // Nếu autoCreatePlayer = false, bạn phải gọi thủ công:
-        // if (!NetworkClient.ready) NetworkClient.Ready();
-        // NetworkClient.AddPlayer();
+        // Check if client is ready
+        if (NetworkClient.ready)
+        {
+            DebugLog("[CLIENT] Client is READY");
+        }
+        else
+        {
+            DebugLog("[CLIENT] Client is NOT ready yet (waiting...)");
+        }
     }
 
-    /// <summary>
-    /// Gọi khi client disconnect khỏi server
-    /// </summary>
     public override void OnClientDisconnect()
     {
         base.OnClientDisconnect();
-        Debug.Log("[CLIENT] Disconnected from server!");
+        DebugLog("[CLIENT] ✗ Disconnected from server!");
     }
 
-    /// <summary>
-    /// Gọi khi client dừng
-    /// </summary>
     public override void OnStopClient()
     {
         base.OnStopClient();
-        Debug.Log("[CLIENT] Client stopped!");
+        DebugLog("[CLIENT] Client stopped!");
+    }
+
+    // =================================================================
+    // HELPER METHODS
+    // =================================================================
+
+    private void DebugLog(string message)
+    {
+        if (showDebugLogs)
+        {
+            Debug.Log(message);
+        }
+    }
+
+    // =================================================================
+    // SCENE DEBUG VISUALIZATION
+    // =================================================================
+
+    private void OnDrawGizmos()
+    {
+        if (!showDebugGizmos) return;
+        if (spawnPoints == null) return;
+
+        // Draw spawn points
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            if (spawnPoints[i] == null) continue;
+
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(spawnPoints[i].position, 0.5f);
+            Gizmos.DrawLine(spawnPoints[i].position, spawnPoints[i].position + Vector3.up * 2f);
+
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(spawnPoints[i].position + Vector3.up * 2.5f, $"Spawn {i}");
+#endif
+        }
+
+        // Draw connections between spawn points
+        Gizmos.color = Color.yellow;
+        for (int i = 0; i < spawnPoints.Length - 1; i++)
+        {
+            if (spawnPoints[i] == null || spawnPoints[i + 1] == null) continue;
+            Gizmos.DrawLine(spawnPoints[i].position, spawnPoints[i + 1].position);
+        }
+    }
+
+    // =================================================================
+    // RUNTIME DEBUG INFO
+    // =================================================================
+
+    private void OnGUI()
+    {
+        if (!showDebugLogs) return;
+
+        GUILayout.BeginArea(new Rect(10, 10, 300, 500));
+        GUILayout.BeginVertical("box");
+
+        GUILayout.Label($"<b>Network Status</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        GUILayout.Label($"Mode: {mode}");
+
+        if (NetworkServer.active)
+        {
+            GUILayout.Label($"<color=green>SERVER ACTIVE</color>", new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.Label($"Connections: {NetworkServer.connections.Count}");
+        }
+
+        if (NetworkClient.isConnected)
+        {
+            GUILayout.Label($"<color=green>CLIENT CONNECTED</color>", new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.Label($"Ready: {NetworkClient.ready}");
+        }
+
+        // Count players
+        var players = FindObjectsByType<NetworkIdentity>(FindObjectsSortMode.None);
+        GUILayout.Label($"Network Objects: {players.Length}");
+
+        int localPlayerCount = 0;
+        foreach (var p in players)
+        {
+            if (p.isLocalPlayer) localPlayerCount++;
+        }
+        GUILayout.Label($"Local Players: {localPlayerCount}");
+
+        GUILayout.EndVertical();
+        GUILayout.EndArea();
     }
 }

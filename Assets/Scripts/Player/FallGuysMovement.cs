@@ -104,12 +104,24 @@ public class FallGuysMovement : NetworkBehaviour
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
+        Debug.Log($"[LOCAL] ========================================");
         Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
+        Debug.Log($"[LOCAL] Position: {transform.position}");
+        Debug.Log($"[LOCAL] IsServer: {isServer}, IsClient: {isClient}");
 
         // Auto-assign camera if not set
         if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
+            Debug.Log($"[LOCAL] Auto-assigned Main Camera");
+        }
+        else if (cameraTransform != null)
+        {
+            Debug.Log($"[LOCAL] Camera already assigned: {cameraTransform.name}");
+        }
+        else
+        {
+            Debug.LogError($"[LOCAL] NO CAMERA FOUND! Can't control player!");
         }
 
         // Change color for local player
@@ -117,7 +129,14 @@ public class FallGuysMovement : NetworkBehaviour
         if (renderer != null)
         {
             renderer.material.color = Color.green;
+            Debug.Log($"[LOCAL] Player colored GREEN (local player)");
         }
+        else
+        {
+            Debug.LogError($"[LOCAL] NO RENDERER on local player! Can't see it!");
+        }
+
+        Debug.Log($"[LOCAL] ========================================");
     }
 
     public override void OnStopServer()

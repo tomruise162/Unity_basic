@@ -4,19 +4,8 @@ using Mirror;
 using System;
 
 /// <summary>
-/// CoinUI - Hien thi so coin cua local player.
-/// 
-/// Co 2 cach de update UI:
-/// 
-/// CACH 1 (hien tai): Polling trong Update()
-/// - Don gian, de hieu
-/// - Chay moi frame, khong toi uu
-/// 
-/// CACH 2 (tot hon): Event-based
-/// - Chi update khi gia tri thay doi
-/// - Ket hop voi SyncVar hook trong PlayerNetwork
-/// 
-/// Code nay giu ca 2 cach de ban hoc.
+/// CoinUI - Shows coin count for the local player.
+/// Refactored to work with FallGuysMovement script.
 /// </summary>
 public class CoinUI : MonoBehaviour
 {
@@ -24,46 +13,39 @@ public class CoinUI : MonoBehaviour
     public TextMeshProUGUI coinText;
 
     [Header("Settings")]
-    [Tooltip("True = dung polling (Update), False = dung event")]
-    public bool usePolling = true;
+    [Tooltip("True = use polling (Update), False = use event (recommended)")]
+    public bool usePolling = false; // Changed default to false as we now have robust events
 
-    private PlayerNetwork localPlayer;
+    private FallGuysMovement localPlayer;
 
-    // Event cho cach 2: PlayerNetwork se goi event nay
+    // Event: FallGuysMovement will call this
     public static event Action<int> OnLocalPlayerCoinChanged;
 
     void Start()
     {
-        // Dang ky lang nghe event (cach 2)
         OnLocalPlayerCoinChanged += UpdateCoinDisplay;
     }
 
     void OnDestroy()
     {
-        // Huy dang ky khi destroy
         OnLocalPlayerCoinChanged -= UpdateCoinDisplay;
     }
 
     void Update()
     {
-        // Chi chay neu dung polling mode
         if (!usePolling) return;
 
-        // Tim local player neu chua co
+        // Find local player if needed
         if (localPlayer == null)
         {
-            localPlayer = NetworkClient.localPlayer?.GetComponent<PlayerNetwork>();
+            localPlayer = NetworkClient.localPlayer?.GetComponent<FallGuysMovement>();
             if (localPlayer == null) return;
         }
 
-        // Update UI moi frame
+        // Poll UI every frame
         UpdateCoinDisplay(localPlayer.coinCount);
     }
 
-    /// <summary>
-    /// Update hien thi coin.
-    /// Duoc goi tu Update() (polling) hoac tu event (event-based).
-    /// </summary>
     private void UpdateCoinDisplay(int coinCount)
     {
         if (coinText != null)
@@ -73,12 +55,9 @@ public class CoinUI : MonoBehaviour
     }
 
     // =====================================================================
-    // STATIC METHOD: Goi tu PlayerNetwork.OnCoinCountChanged (hook)
+    // STATIC METHOD: Called from FallGuysMovement.OnCoinCountChanged (hook)
     // =====================================================================
 
-    /// <summary>
-    /// Goi method nay tu SyncVar hook de thong bao UI update.
-    /// </summary>
     public static void NotifyCoinChanged(int newValue)
     {
         OnLocalPlayerCoinChanged?.Invoke(newValue);

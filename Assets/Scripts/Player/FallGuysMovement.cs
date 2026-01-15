@@ -57,7 +57,7 @@ public class FallGuysMovement : NetworkBehaviour
     // ===== Server-applied movement state =====
     private Vector3 serverMoveDirection;
     private bool serverJumpHeld;
-    
+
     // Jump buffering on server
     private float serverJumpBufferTimer;
     private float serverLastGroundedTime;
@@ -212,7 +212,7 @@ public class FallGuysMovement : NetworkBehaviour
         {
             camForward = cameraTransform.forward;
             camRight = cameraTransform.right;
-            
+
             // Project onto ground plane
             camForward.y = 0f;
             camRight.y = 0f;
@@ -230,7 +230,7 @@ public class FallGuysMovement : NetworkBehaviour
             // Clear after a short delay to ensure server receives it
             jumpPressed = false;
         }
-        
+
         divePressed = false;
     }
 
@@ -313,7 +313,7 @@ public class FallGuysMovement : NetworkBehaviour
         // Allow jump if:
         // 1. Jump buffer is active (recently pressed jump)
         // 2. AND either grounded OR within coyote time
-        bool canJump = serverJumpBufferTimer > 0f && 
+        bool canJump = serverJumpBufferTimer > 0f &&
                        (isGrounded || Time.time < serverLastGroundedTime + coyoteTime);
 
         if (canJump)

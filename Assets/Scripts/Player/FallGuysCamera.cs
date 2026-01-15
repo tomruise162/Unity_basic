@@ -35,7 +35,7 @@ public class FallGuysCamera : MonoBehaviour
 
     [Header("Smoothing")]
     [SerializeField] private float positionSmoothTime = 0.1f;
-    [SerializeField] private float rotationSmoothTime = 0.05f;
+    //[SerializeField] private float rotationSmoothTime = 0.05f;
 
     [Header("Collision")]
     [SerializeField] private LayerMask collisionMask = ~0;

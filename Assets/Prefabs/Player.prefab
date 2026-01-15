@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 5693310348008720758}
   - component: {fileID: 8905104681541712315}
   - component: {fileID: 3923238371802570551}
-  - component: {fileID: 1511722277163950804}
+  - component: {fileID: -5158031729359815364}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -193,7 +193,7 @@ MonoBehaviour:
   lowJumpMultiplier: 2
   cameraTransform: {fileID: 0}
   coinCount: 0
---- !u!114 &1511722277163950804
+--- !u!114 &-5158031729359815364
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -202,10 +202,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 3982184379949828128}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb803efbe62c34d7baece46c9ffebad9, type: 3}
+  m_Script: {fileID: 11500000, guid: 8ff3ba0becae47b8b9381191598957c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  syncDirection: 0
+  syncDirection: 1
   syncMode: 0
   syncInterval: 0
   target: {fileID: 6466129114426683921}

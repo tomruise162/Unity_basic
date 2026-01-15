@@ -3,9 +3,7 @@ using Mirror;
 
 /// <summary>
 /// Fall Guys style Movement Controller with Coin Collection (Mirror, server-authoritative)
-///
-/// Combines FallGuysMovement with coin collection system from PlayerNetwork.
-/// FIXED: More reliable jump detection with buffering.
+/// FIXED: Added proper velocity syncing for client movement visibility
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class FallGuysMovement : NetworkBehaviour
@@ -17,7 +15,7 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private float airControlMultiplier = 0.4f;
 
     [Header("Rotation")]
-    [SerializeField] private float rotationSpeed = 720f; // degrees/sec
+    [SerializeField] private float rotationSpeed = 720f;
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 8f;
@@ -47,6 +45,14 @@ public class FallGuysMovement : NetworkBehaviour
     [Header("Coin System")]
     [SyncVar(hook = nameof(OnCoinCountChanged))]
     public int coinCount = 0;
+
+    // ===== SYNC VARIABLES FOR CLIENT PREDICTION =====
+    // These ensure clients see smooth movement even though server calculates physics
+    [SyncVar]
+    private Vector3 syncedVelocity;
+
+    [SyncVar]
+    private bool syncedIsGrounded;
 
     // ===== Client input state =====
     private Vector2 inputDirection;
@@ -128,14 +134,10 @@ public class FallGuysMovement : NetworkBehaviour
 
     // ================= COIN SYSTEM =================
 
-    /// <summary>
-    /// SYNCVAR HOOK: Runs on CLIENT when coinCount changes.
-    /// </summary>
     private void OnCoinCountChanged(int oldValue, int newValue)
     {
         Debug.Log($"[HOOK] coinCount changed: {oldValue} -> {newValue}");
 
-        // Only update UI for local player
         if (isLocalPlayer)
         {
             CoinUI.NotifyCoinChanged(newValue);
@@ -153,30 +155,20 @@ public class FallGuysMovement : NetworkBehaviour
         CmdPickupCoin(coinNi.netId);
     }
 
-    /// <summary>
-    /// COMMAND: Runs on SERVER, called from CLIENT.
-    /// </summary>
     [Command]
     private void CmdPickupCoin(uint coinNetId)
     {
-        // Server validate: does coin exist?
         if (!NetworkServer.spawned.TryGetValue(coinNetId, out NetworkIdentity coinNi))
         {
             Debug.Log($"[SERVER] Coin {coinNetId} not found - maybe already picked up");
             return;
         }
 
-        // Server: increase coin count (SyncVar will sync to clients)
         coinCount++;
         Debug.Log($"[SERVER] Player {netId} picked up coin. Total: {coinCount}");
 
-        // Server: destroy coin (Mirror syncs to all clients)
         NetworkServer.Destroy(coinNi.gameObject);
-
-        // Notify all clients (visual/audio effects)
         RpcOnCoinPickedUp(coinNi.gameObject.transform.position);
-
-        // Notify specific player (personal feedback)
         TargetOnYouPickedUpCoin(connectionToClient, coinCount);
     }
 
@@ -184,14 +176,12 @@ public class FallGuysMovement : NetworkBehaviour
     private void RpcOnCoinPickedUp(Vector3 coinPosition)
     {
         Debug.Log($"[RPC-ALL] A coin was picked up at {coinPosition}");
-        // Play particle effect, sound, etc.
     }
 
     [TargetRpc]
     private void TargetOnYouPickedUpCoin(NetworkConnection target, int totalCoins)
     {
         Debug.Log($"[RPC-TARGET] YOU picked up a coin! Total: {totalCoins}");
-        // Personal notification, sound, etc.
     }
 
     // ================= MOVEMENT INPUT =================
@@ -203,7 +193,6 @@ public class FallGuysMovement : NetworkBehaviour
 
         ReadInput();
 
-        // Get camera orientation vectors
         Vector3 camForward = Vector3.forward;
         Vector3 camRight = Vector3.right;
 
@@ -211,22 +200,16 @@ public class FallGuysMovement : NetworkBehaviour
         {
             camForward = cameraTransform.forward;
             camRight = cameraTransform.right;
-
-            // Project onto ground plane
             camForward.y = 0f;
             camRight.y = 0f;
             camForward.Normalize();
             camRight.Normalize();
         }
 
-        // Send input to server - send jump as a trigger, not just one-shot
         CmdSendInput(inputDirection, camForward, camRight, jumpPressed, divePressed, jumpHeld);
 
-        // Don't clear jumpPressed here - let it send multiple times if needed
-        // It will be handled by server's jump buffer
         if (jumpPressed)
         {
-            // Clear after a short delay to ensure server receives it
             jumpPressed = false;
         }
 
@@ -242,7 +225,6 @@ public class FallGuysMovement : NetworkBehaviour
         if (inputDirection.sqrMagnitude > 1f)
             inputDirection.Normalize();
 
-        // Use GetKeyDown to capture jump press
         if (Input.GetKeyDown(KeyCode.Space))
         {
             jumpPressed = true;
@@ -261,7 +243,6 @@ public class FallGuysMovement : NetworkBehaviour
     [Command]
     private void CmdSendInput(Vector2 rawInput, Vector3 camForward, Vector3 camRight, bool jump, bool dive, bool heldJump)
     {
-        // Calculate movement direction on SERVER
         if (rawInput.sqrMagnitude > 0.001f)
         {
             Vector3 dir = camForward * rawInput.y + camRight * rawInput.x;
@@ -272,14 +253,12 @@ public class FallGuysMovement : NetworkBehaviour
             serverMoveDirection = Vector3.zero;
         }
 
-        // Jump buffering: if jump is pressed, set the buffer timer
         if (jump)
         {
             serverJumpBufferTimer = jumpBufferTime;
             Debug.Log("[SERVER] Jump input received, buffer set!");
         }
 
-        // Dive input
         if (dive && CanDive())
         {
             PerformDive();
@@ -292,40 +271,52 @@ public class FallGuysMovement : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        if (!isServer) return;
-
-        CheckGround();
-
-        // Decrease jump buffer timer
-        if (serverJumpBufferTimer > 0f)
+        // SERVER: Calculate all physics
+        if (isServer)
         {
-            serverJumpBufferTimer -= Time.fixedDeltaTime;
-        }
+            CheckGround();
 
-        // Track last grounded time for coyote time
-        if (isGrounded)
+            if (serverJumpBufferTimer > 0f)
+            {
+                serverJumpBufferTimer -= Time.fixedDeltaTime;
+            }
+
+            if (isGrounded)
+            {
+                serverLastGroundedTime = Time.time;
+            }
+
+            bool canJump = serverJumpBufferTimer > 0f &&
+                           (isGrounded || Time.time < serverLastGroundedTime + coyoteTime);
+
+            if (canJump)
+            {
+                PerformJump();
+                serverJumpBufferTimer = 0f;
+            }
+
+            ApplyMovement();
+            ApplyRotation();
+            ApplyBetterJumpPhysics();
+
+            // Sync velocity to clients
+            syncedVelocity = rb.linearVelocity;
+            syncedIsGrounded = isGrounded;
+
+            wasGrounded = isGrounded;
+        }
+        // CLIENT: Apply synced velocity for smooth interpolation
+        else if (isClient)
         {
-            serverLastGroundedTime = Time.time;
+            // Optional: Apply synced velocity to rigidbody for smoother client-side prediction
+            // This helps if NetworkRigidbody isn't syncing velocity properly
+            if (rb.linearVelocity != syncedVelocity)
+            {
+                rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, syncedVelocity, Time.fixedDeltaTime * 10f);
+            }
+
+            isGrounded = syncedIsGrounded;
         }
-
-        // Jump with buffer and coyote time
-        // Allow jump if:
-        // 1. Jump buffer is active (recently pressed jump)
-        // 2. AND either grounded OR within coyote time
-        bool canJump = serverJumpBufferTimer > 0f &&
-                       (isGrounded || Time.time < serverLastGroundedTime + coyoteTime);
-
-        if (canJump)
-        {
-            PerformJump();
-            serverJumpBufferTimer = 0f; // Clear buffer after jumping
-        }
-
-        ApplyMovement();
-        ApplyRotation();
-        ApplyBetterJumpPhysics();
-
-        wasGrounded = isGrounded;
     }
 
     private void CheckGround()
@@ -421,14 +412,12 @@ public class FallGuysMovement : NetworkBehaviour
     private void RpcOnJump()
     {
         Debug.Log($"[RPC] Player {netId} jumped!");
-        // Play jump animation, sound, particle effect
     }
 
     [ClientRpc]
     private void RpcOnDive()
     {
         Debug.Log($"[RPC] Player {netId} dived!");
-        // Play dive animation, sound, particle effect
     }
 
     // ================= DEBUG =================

@@ -45,6 +45,14 @@ public class OnlyUpClientAuthority : NetworkBehaviour
         {
             ChangePlayerColor(Color.blue); // Màu xanh cho remote players
             Debug.Log($"[CLIENT] Remote player {netId} - Color: Blue (Server→Client)");
+            
+            // Verify NetworkTransform cho remote players
+            var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
+            if (networkTransform != null)
+            {
+                Debug.Log($"[CLIENT] Remote player {netId} NetworkTransform: syncDirection={networkTransform.syncDirection}, " +
+                         $"syncPosition={networkTransform.syncPosition}, syncRotation={networkTransform.syncRotation}");
+            }
         }
     }
 
@@ -52,6 +60,27 @@ public class OnlyUpClientAuthority : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
         Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
+        
+        // QUAN TRONG: Verify NetworkTransform config
+        var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
+        if (networkTransform != null)
+        {
+            Debug.Log($"[LOCAL] NetworkTransformHybrid found:");
+            Debug.Log($"[LOCAL]   - syncDirection: {networkTransform.syncDirection} (0=ServerToClient, 1=ClientToServer)");
+            Debug.Log($"[LOCAL]   - syncPosition: {networkTransform.syncPosition}");
+            Debug.Log($"[LOCAL]   - syncRotation: {networkTransform.syncRotation}");
+            
+            if (networkTransform.syncDirection != Mirror.SyncDirection.ClientToServer)
+            {
+                Debug.LogError($"[LOCAL] ERROR: NetworkTransform syncDirection is NOT ClientToServer! " +
+                              $"Current: {networkTransform.syncDirection}. " +
+                              $"Please set Sync Direction to ClientToServer in Player prefab!");
+            }
+        }
+        else
+        {
+            Debug.LogError($"[LOCAL] ERROR: NetworkTransformHybrid component not found!");
+        }
         
         // QUAN TRONG: Disable NetworkRigidbody component nếu có
         // NetworkRigidbody tự động set isKinematic = true cho remote players
@@ -170,6 +199,7 @@ public class OnlyUpClientAuthority : NetworkBehaviour
         Physics.SyncTransforms();
 
         Debug.Log($"[CLIENT] Local player {netId} jumped at position: {transform.position}");
+        Debug.Log($"[CLIENT] NetworkTransform should sync this position to server and other clients");
 
         // Gửi RPC để các clients khác biết (visual effects, sound, etc.)
         CmdOnJump();

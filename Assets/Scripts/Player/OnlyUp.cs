@@ -25,6 +25,41 @@ public class SimpleNetworkJumpWithGround : NetworkBehaviour
         rb.freezeRotation = true;
     }
 
+    // ================= NETWORK LIFECYCLE =================
+
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+        Debug.Log($"[SERVER] Player {netId} started on server");
+        
+        // Server: Rigidbody chạy physics bình thường
+        rb.isKinematic = false;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        Debug.Log($"[CLIENT] Player {netId} appeared on client, isLocalPlayer: {isLocalPlayer}");
+        
+        // Client: Chỉ local player mới có Rigidbody động, remote players phải kinematic
+        // để tránh conflict với NetworkTransform sync
+        if (!isLocalPlayer)
+        {
+            rb.isKinematic = true;
+            Debug.Log($"[CLIENT] Set remote player {netId} Rigidbody to kinematic");
+        }
+    }
+
+    public override void OnStartLocalPlayer()
+    {
+        base.OnStartLocalPlayer();
+        Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
+        
+        // Local player trên client: Rigidbody động (nhưng server vẫn là authority)
+        // Trong host mode, server sẽ điều khiển, client chỉ hiển thị
+        rb.isKinematic = false;
+    }
+
     // ================= CLIENT =================
     private void Update()
     {
@@ -35,6 +70,17 @@ public class SimpleNetworkJumpWithGround : NetworkBehaviour
             CmdRequestJump();
         }
     }
+    
+    // Debug: Log position của remote players (chạy trên tất cả clients)
+    private void LateUpdate()
+    {
+        if (isLocalPlayer) return; // Bỏ qua local player
+        
+        if (Time.frameCount % 50 == 0) // ~1 lần/giây
+        {
+            Debug.Log($"[CLIENT] Remote player {netId} position: {transform.position}");
+        }
+    }
 
     // ================= SERVER =================
     private void FixedUpdate()
@@ -42,6 +88,12 @@ public class SimpleNetworkJumpWithGround : NetworkBehaviour
         if (!isServer) return;
 
         CheckGround();
+        
+        // Debug: Log position mỗi giây để kiểm tra sync
+        if (Time.frameCount % 50 == 0) // ~1 lần/giây với 50 FPS
+        {
+            Debug.Log($"[SERVER] Player {netId} position: {transform.position}");
+        }
     }
 
     [Command]

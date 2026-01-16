@@ -84,7 +84,19 @@ public class SimpleNetworkManager : NetworkManager
         // - Gọi OnStartLocalPlayer() CHỈ trên client sở hữu object này
         NetworkServer.AddPlayerForConnection(conn, playerObject);
 
-        Debug.Log($"[SERVER] Player spawned successfully! NetId: {playerObject.GetComponent<NetworkIdentity>().netId}");
+        NetworkIdentity netId = playerObject.GetComponent<NetworkIdentity>();
+        Debug.Log($"[SERVER] Player spawned successfully! NetId: {netId.netId}, ConnectionId: {conn.connectionId}");
+        
+        // Kiểm tra NetworkTransform component
+        var networkTransform = playerObject.GetComponent<NetworkTransformBase>();
+        if (networkTransform != null)
+        {
+            Debug.Log($"[SERVER] NetworkTransform found: syncPosition={networkTransform.syncPosition}, syncRotation={networkTransform.syncRotation}");
+        }
+        else
+        {
+            Debug.LogWarning($"[SERVER] WARNING: No NetworkTransform component found on player prefab! Position/Rotation will NOT sync!");
+        }
     }
 
     /// <summary>

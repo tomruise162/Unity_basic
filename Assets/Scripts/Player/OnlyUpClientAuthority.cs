@@ -53,6 +53,31 @@ public class OnlyUpClientAuthority : NetworkBehaviour
         base.OnStartLocalPlayer();
         Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
         
+        // QUAN TRONG: Disable NetworkRigidbody component nếu có
+        // NetworkRigidbody tự động set isKinematic = true cho remote players
+        // Với Client Authority, chúng ta KHÔNG CẦN NetworkRigidbody
+        // Chỉ cần NetworkTransform (Client Authority) là đủ
+        // Check tất cả các loại NetworkRigidbody có thể có
+        var networkRigidbodyReliable = GetComponent<Mirror.NetworkRigidbodyReliable>();
+        var networkRigidbodyUnreliable = GetComponent<Mirror.NetworkRigidbodyUnreliable>();
+        
+        if (networkRigidbodyReliable != null)
+        {
+            networkRigidbodyReliable.enabled = false;
+            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyReliable component! With Client Authority, we only need NetworkTransform.");
+        }
+        
+        if (networkRigidbodyUnreliable != null)
+        {
+            networkRigidbodyUnreliable.enabled = false;
+            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyUnreliable component! With Client Authority, we only need NetworkTransform.");
+        }
+        
+        // QUAN TRONG: Đảm bảo Rigidbody KHÔNG bị kinematic
+        // Với Client Authority, local player CẦN Rigidbody động để di chuyển
+        rb.isKinematic = false;
+        Debug.Log($"[LOCAL] Set Rigidbody.isKinematic = false for local player");
+        
         // Đổi màu cho LOCAL player (máy mình)
         // Local player: Client → Server (có authority, di chuyển trực tiếp)
         ChangePlayerColor(Color.green); // Màu xanh lá cho local player
@@ -112,6 +137,15 @@ public class OnlyUpClientAuthority : NetworkBehaviour
     {
         // Chỉ local player mới chạy physics
         if (!isLocalPlayer) return;
+
+        // QUAN TRONG: Đảm bảo Rigidbody không bị NetworkRigidbody set kinematic
+        // NetworkRigidbody có thể override isKinematic trong FixedUpdate
+        // Với Client Authority, local player CẦN Rigidbody động
+        if (rb.isKinematic)
+        {
+            rb.isKinematic = false;
+            Debug.LogWarning($"[LOCAL] Rigidbody was kinematic! Fixed to false. This may be caused by NetworkRigidbody component.");
+        }
 
         // Check ground
         CheckGround();

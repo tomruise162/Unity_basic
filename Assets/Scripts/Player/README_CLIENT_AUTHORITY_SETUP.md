@@ -44,6 +44,20 @@ Trong Inspector của Player prefab, tìm component **NetworkTransformHybrid**:
 - `Server Only`: ❌ Tắt (false)
 - `Local Player Authority`: ✅ Bật (true) - QUAN TRỌNG!
 
+### Bước 5: XÓA hoặc DISABLE NetworkRigidbody (QUAN TRỌNG!)
+
+**VẤN ĐỀ**: NetworkRigidbody tự động set `isKinematic = true` cho remote players.
+Với Client Authority, chúng ta **KHÔNG CẦN** NetworkRigidbody!
+
+**GIẢI PHÁP**:
+1. **Cách 1 (Khuyến nghị)**: Xóa NetworkRigidbody component khỏi prefab
+   - Tìm component `Network Rigidbody (Reliable)` hoặc `Network Rigidbody (Unreliable)`
+   - Xóa nó đi (chỉ cần NetworkTransform là đủ)
+
+2. **Cách 2**: Code tự động disable (đã implement trong OnlyUpClientAuthority.cs)
+   - Script sẽ tự động disable NetworkRigidbody khi local player spawn
+   - Nhưng tốt nhất vẫn nên xóa khỏi prefab
+
 ### Bước 5: Test
 
 1. Build và chạy game

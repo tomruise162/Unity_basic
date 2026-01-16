@@ -37,80 +37,50 @@ public class OnlyUpClientAuthority : NetworkBehaviour
     public override void OnStartClient()
     {
         base.OnStartClient();
-        Debug.Log($"[CLIENT] Player {netId} appeared, isLocalPlayer: {isLocalPlayer}");
         
         // Đổi màu cho REMOTE players (máy người khác)
-        // Remote players: Server → Client (nhận position từ server)
         if (!isLocalPlayer)
         {
-            ChangePlayerColor(Color.blue); // Màu xanh cho remote players
-            Debug.Log($"[CLIENT] Remote player {netId} - Color: Blue (Server→Client)");
-            
-            // Verify NetworkTransform cho remote players
-            var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
-            if (networkTransform != null)
-            {
-                Debug.Log($"[CLIENT] Remote player {netId} NetworkTransform: syncDirection={networkTransform.syncDirection}, " +
-                         $"syncPosition={networkTransform.syncPosition}, syncRotation={networkTransform.syncRotation}");
-            }
+            ChangePlayerColor(Color.blue);
         }
     }
 
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
-        Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
         
-        // QUAN TRONG: Verify NetworkTransform config
+        // Verify NetworkTransform config
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
-        if (networkTransform != null)
+        if (networkTransform == null)
         {
-            Debug.Log($"[LOCAL] NetworkTransformHybrid found:");
-            Debug.Log($"[LOCAL]   - syncDirection: {networkTransform.syncDirection} (0=ServerToClient, 1=ClientToServer)");
-            Debug.Log($"[LOCAL]   - syncPosition: {networkTransform.syncPosition}");
-            Debug.Log($"[LOCAL]   - syncRotation: {networkTransform.syncRotation}");
-            
-            if (networkTransform.syncDirection != Mirror.SyncDirection.ClientToServer)
-            {
-                Debug.LogError($"[LOCAL] ERROR: NetworkTransform syncDirection is NOT ClientToServer! " +
-                              $"Current: {networkTransform.syncDirection}. " +
-                              $"Please set Sync Direction to ClientToServer in Player prefab!");
-            }
+            Debug.LogError($"[LOCAL] NetworkTransformHybrid component not found!");
         }
-        else
+        else if (networkTransform.syncDirection != Mirror.SyncDirection.ClientToServer)
         {
-            Debug.LogError($"[LOCAL] ERROR: NetworkTransformHybrid component not found!");
+            Debug.LogError($"[LOCAL] NetworkTransform syncDirection must be ClientToServer! Current: {networkTransform.syncDirection}");
         }
         
-        // QUAN TRONG: Disable NetworkRigidbody component nếu có
-        // NetworkRigidbody tự động set isKinematic = true cho remote players
-        // Với Client Authority, chúng ta KHÔNG CẦN NetworkRigidbody
-        // Chỉ cần NetworkTransform (Client Authority) là đủ
-        // Check tất cả các loại NetworkRigidbody có thể có
+        // Disable NetworkRigidbody nếu có (không cần với Client Authority)
         var networkRigidbodyReliable = GetComponent<Mirror.NetworkRigidbodyReliable>();
         var networkRigidbodyUnreliable = GetComponent<Mirror.NetworkRigidbodyUnreliable>();
         
         if (networkRigidbodyReliable != null)
         {
             networkRigidbodyReliable.enabled = false;
-            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyReliable component! With Client Authority, we only need NetworkTransform.");
+            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyReliable - not needed with Client Authority");
         }
         
         if (networkRigidbodyUnreliable != null)
         {
             networkRigidbodyUnreliable.enabled = false;
-            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyUnreliable component! With Client Authority, we only need NetworkTransform.");
+            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyUnreliable - not needed with Client Authority");
         }
         
-        // QUAN TRONG: Đảm bảo Rigidbody KHÔNG bị kinematic
-        // Với Client Authority, local player CẦN Rigidbody động để di chuyển
+        // Đảm bảo Rigidbody không bị kinematic
         rb.isKinematic = false;
-        Debug.Log($"[LOCAL] Set Rigidbody.isKinematic = false for local player");
         
-        // Đổi màu cho LOCAL player (máy mình)
-        // Local player: Client → Server (có authority, di chuyển trực tiếp)
-        ChangePlayerColor(Color.green); // Màu xanh lá cho local player
-        Debug.Log($"[LOCAL] Local player {netId} - Color: Green (Client→Server Authority)");
+        // Đổi màu cho local player
+        ChangePlayerColor(Color.green);
     }
 
     /// <summary>
@@ -198,9 +168,6 @@ public class OnlyUpClientAuthority : NetworkBehaviour
         // Đồng bộ physics để NetworkTransform đọc được transform mới
         Physics.SyncTransforms();
 
-        Debug.Log($"[CLIENT] Local player {netId} jumped at position: {transform.position}");
-        Debug.Log($"[CLIENT] NetworkTransform should sync this position to server and other clients");
-
         // Gửi RPC để các clients khác biết (visual effects, sound, etc.)
         CmdOnJump();
     }
@@ -242,7 +209,6 @@ public class OnlyUpClientAuthority : NetworkBehaviour
     [ClientRpc]
     private void RpcOnJump()
     {
-        Debug.Log($"[RPC] Jump visual for player {netId}");
         // animation / sound / particle effects
     }
 

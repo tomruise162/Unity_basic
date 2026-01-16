@@ -15,11 +15,12 @@ GameObject:
   - component: {fileID: 5693310348008720758}
   - component: {fileID: -2954261927603760534}
   - component: {fileID: 822403597872660822}
-  - component: {fileID: 4376780495746501501}
   - component: {fileID: 2032970469024525095}
-  m_Layer: 7
+  - component: {fileID: 8831643101765257270}
+  - component: {fileID: 2710048465216618951}
+  m_Layer: 0
   m_Name: Player
-  m_TagString: FloorTile
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -194,7 +195,7 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
---- !u!114 &4376780495746501501
+--- !u!114 &2032970469024525095
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -203,19 +204,65 @@ MonoBehaviour:
   m_GameObject: {fileID: 3982184379949828128}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 69f987bb2e95e624fbb9ccf344b375c3, type: 3}
+  m_Script: {fileID: 11500000, guid: 8f63ea2e505fd484193fb31c5c55ca73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  syncDirection: 1
+  syncMode: 0
+  syncInterval: 0.033333335
+  baselineRate: 1
+  unreliableRedundancy: 0
+  baselineIsDelta: 1
+  debugLog: 0
+  useFixedUpdate: 0
+  target: {fileID: 6466129114426683921}
+  bufferSizeLimit: 64
+  sendRate: 30
+  positionSensitivity: 0.01
+  rotationSensitivity: 0.01
+  scaleSensitivity: 0.01
+  syncPosition: 1
+  syncRotation: 1
+  syncScale: 0
+  debugDraw: 0
+  showGizmos: 0
+  showOverlay: 0
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
+--- !u!114 &8831643101765257270
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3982184379949828128}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf0efd44d7be8db4086970558eb40424, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+  moveSpeed: 8
+  acceleration: 50
+  deceleration: 40
+  airControlMultiplier: 0.4
+  rotationSpeed: 720
   jumpForce: 8
   groundCheck: {fileID: 3940160918648426485}
-  groundCheckRadius: 0.3
+  groundCheckRadius: 0.15
   groundMask:
     serializedVersion: 2
     m_Bits: 128
---- !u!114 &2032970469024525095
+  jumpBufferTime: 0.15
+  coyoteTime: 0.1
+  diveForce: 12
+  diveCooldown: 1
+  fallMultiplier: 2.5
+  lowJumpMultiplier: 2
+  cameraTransform: {fileID: 0}
+  coinCount: 0
+--- !u!114 &2710048465216618951
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -257,7 +304,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3940160918648426485}
-  m_Layer: 7
+  m_Layer: 0
   m_Name: GroundCheckTransform
   m_TagString: Untagged
   m_Icon: {fileID: 0}

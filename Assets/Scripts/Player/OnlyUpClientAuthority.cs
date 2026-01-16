@@ -38,12 +38,50 @@ public class OnlyUpClientAuthority : NetworkBehaviour
     {
         base.OnStartClient();
         Debug.Log($"[CLIENT] Player {netId} appeared, isLocalPlayer: {isLocalPlayer}");
+        
+        // Đổi màu cho REMOTE players (máy người khác)
+        // Remote players: Server → Client (nhận position từ server)
+        if (!isLocalPlayer)
+        {
+            ChangePlayerColor(Color.blue); // Màu xanh cho remote players
+            Debug.Log($"[CLIENT] Remote player {netId} - Color: Blue (Server→Client)");
+        }
     }
 
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
         Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
+        
+        // Đổi màu cho LOCAL player (máy mình)
+        // Local player: Client → Server (có authority, di chuyển trực tiếp)
+        ChangePlayerColor(Color.green); // Màu xanh lá cho local player
+        Debug.Log($"[LOCAL] Local player {netId} - Color: Green (Client→Server Authority)");
+    }
+
+    /// <summary>
+    /// Đổi màu player để dễ nhận diện
+    /// </summary>
+    private void ChangePlayerColor(Color color)
+    {
+        // Tìm Renderer component để đổi màu
+        var renderer = GetComponent<Renderer>();
+        if (renderer != null && renderer.material != null)
+        {
+            // Tạo material instance để không ảnh hưởng đến prefab
+            renderer.material = new Material(renderer.material);
+            renderer.material.color = color;
+        }
+        else
+        {
+            // Nếu không có Renderer, thử tìm trong children
+            var childRenderer = GetComponentInChildren<Renderer>();
+            if (childRenderer != null && childRenderer.material != null)
+            {
+                childRenderer.material = new Material(childRenderer.material);
+                childRenderer.material.color = color;
+            }
+        }
     }
 
     // ================= CLIENT-AUTHORITATIVE MOVEMENT =================

@@ -16,9 +16,9 @@ GameObject:
   - component: {fileID: -2954261927603760534}
   - component: {fileID: 822403597872660822}
   - component: {fileID: 4376780495746501501}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: FloorTile
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -223,7 +223,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3940160918648426485}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: GroundCheckTransform
   m_TagString: Untagged
   m_Icon: {fileID: 0}

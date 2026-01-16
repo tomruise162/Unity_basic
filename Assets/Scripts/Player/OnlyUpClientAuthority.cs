@@ -1,0 +1,158 @@
+using UnityEngine;
+using Mirror;
+
+/// <summary>
+/// Client-Authoritative Movement với Rigidbody
+/// Pattern giống QWorld nhưng dùng Rigidbody thay vì CharacterController
+/// 
+/// FLOW:
+/// 1. Client đọc input và di chuyển trực tiếp
+/// 2. NetworkTransform (Client Authority) sync position từ client lên server
+/// 3. Server broadcast xuống các clients khác
+/// </summary>
+[RequireComponent(typeof(Rigidbody))]
+public class OnlyUpClientAuthority : NetworkBehaviour
+{
+    [Header("Jump")]
+    [SerializeField] private float jumpForce = 8f;
+
+    [Header("Ground Check")]
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private float groundCheckRadius = 0.3f;
+    [SerializeField] private LayerMask groundMask;
+
+    private Rigidbody rb;
+
+    // ===== Client state =====
+    private bool isGrounded;
+
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.freezeRotation = true;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        Debug.Log($"[CLIENT] Player {netId} appeared, isLocalPlayer: {isLocalPlayer}");
+    }
+
+    public override void OnStartLocalPlayer()
+    {
+        base.OnStartLocalPlayer();
+        Debug.Log($"[LOCAL] This is MY player! NetId: {netId}");
+    }
+
+    // ================= CLIENT-AUTHORITATIVE MOVEMENT =================
+    
+    /// <summary>
+    /// CLIENT: Đọc input và xử lý movement
+    /// Chỉ local player mới chạy logic này
+    /// </summary>
+    [Client]
+    private void Update()
+    {
+        // Chỉ local player mới xử lý input
+        if (!isLocalPlayer) return;
+
+        // Đọc input
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            HandleJump();
+        }
+    }
+
+    /// <summary>
+    /// CLIENT: FixedUpdate cho physics
+    /// Chỉ local player mới chạy physics
+    /// </summary>
+    [Client]
+    private void FixedUpdate()
+    {
+        // Chỉ local player mới chạy physics
+        if (!isLocalPlayer) return;
+
+        // Check ground
+        CheckGround();
+    }
+
+    /// <summary>
+    /// CLIENT: Xử lý jump trực tiếp trên client
+    /// NetworkTransform sẽ tự động sync position lên server
+    /// </summary>
+    [Client]
+    private void HandleJump()
+    {
+        if (!isGrounded) return;
+
+        // Reset Y velocity
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+
+        // Apply jump impulse trên CLIENT
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+        // Đồng bộ physics để NetworkTransform đọc được transform mới
+        Physics.SyncTransforms();
+
+        Debug.Log($"[CLIENT] Local player {netId} jumped at position: {transform.position}");
+
+        // Gửi RPC để các clients khác biết (visual effects, sound, etc.)
+        CmdOnJump();
+    }
+
+    /// <summary>
+    /// CLIENT: Check ground trên local player
+    /// </summary>
+    [Client]
+    private void CheckGround()
+    {
+        Vector3 checkPos = groundCheck != null
+            ? groundCheck.position
+            : transform.position + Vector3.down * 0.1f;
+
+        isGrounded = Physics.CheckSphere(
+            checkPos,
+            groundCheckRadius,
+            groundMask,
+            QueryTriggerInteraction.Ignore
+        );
+    }
+
+    // ================= RPC (Optional - cho visual effects) =================
+
+    /// <summary>
+    /// COMMAND: Gửi từ client lên server để notify jump
+    /// Dùng cho visual effects, sound, etc.
+    /// </summary>
+    [Command]
+    private void CmdOnJump()
+    {
+        // Server broadcast xuống tất cả clients
+        RpcOnJump();
+    }
+
+    /// <summary>
+    /// CLIENT RPC: Tất cả clients nhận được để play effects
+    /// </summary>
+    [ClientRpc]
+    private void RpcOnJump()
+    {
+        Debug.Log($"[RPC] Jump visual for player {netId}");
+        // animation / sound / particle effects
+    }
+
+    // ================= DEBUG =================
+    private void OnDrawGizmos()
+    {
+        Vector3 checkPos = groundCheck != null
+            ? groundCheck.position
+            : transform.position + Vector3.down * 0.1f;
+
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+        Gizmos.DrawWireSphere(checkPos, groundCheckRadius);
+    }
+}
+

@@ -14,11 +14,11 @@ GameObject:
   - component: {fileID: 4778700563665927924}
   - component: {fileID: 5693310348008720758}
   - component: {fileID: -2954261927603760534}
-  - component: {fileID: 6519367719007796285}
   - component: {fileID: 822403597872660822}
-  m_Layer: 7
+  - component: {fileID: 4376780495746501501}
+  m_Layer: 0
   m_Name: Player
-  m_TagString: FloorTile
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -176,27 +176,6 @@ MonoBehaviour:
   rotationSensitivity: 0.01
   positionPrecision: 0.01
   scalePrecision: 0.01
---- !u!114 &6519367719007796285
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3982184379949828128}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1d191d47f3ec862429be49a24c1bc122, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
-  jumpForce: 8
-  groundCheck: {fileID: 3940160918648426485}
-  groundCheckRadius: 0.3
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 128
 --- !u!114 &822403597872660822
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -214,6 +193,27 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &4376780495746501501
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3982184379949828128}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69f987bb2e95e624fbb9ccf344b375c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  jumpForce: 8
+  groundCheck: {fileID: 3940160918648426485}
+  groundCheckRadius: 0.3
+  groundMask:
+    serializedVersion: 2
+    m_Bits: 128
 --- !u!1 &5429438196211973985
 GameObject:
   m_ObjectHideFlags: 0
@@ -223,7 +223,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3940160918648426485}
-  m_Layer: 7
+  m_Layer: 0
   m_Name: GroundCheckTransform
   m_TagString: Untagged
   m_Icon: {fileID: 0}

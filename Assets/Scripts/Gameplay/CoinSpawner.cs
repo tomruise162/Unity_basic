@@ -8,7 +8,14 @@ public class CoinSpawner : NetworkBehaviour
 
     public override void OnStartServer()
     {
+        if (coinPrefab == null)
+        {
+            Debug.LogError("[SERVER][CoinSpawner] coinPrefab is NOT assigned. No coins will spawn.");
+            return;
+        }
+
         var tiles = Object.FindObjectsByType<FloorTile>(FindObjectsSortMode.None);
+        Debug.Log($"[SERVER][CoinSpawner] Found {tiles.Length} FloorTiles. Spawning coins...");
 
         foreach (var tile in tiles)
         {
@@ -16,6 +23,8 @@ public class CoinSpawner : NetworkBehaviour
 
             var coin = Instantiate(coinPrefab, tile.coinSpawnPoint.position, Quaternion.identity);
             NetworkServer.Spawn(coin);
+            if (coin.TryGetComponent<NetworkIdentity>(out var ni))
+                Debug.Log($"[SERVER][CoinSpawner] Spawned coin netId={ni.netId} at {coin.transform.position}");
         }
     }
 }

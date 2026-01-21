@@ -485,7 +485,7 @@ public class FallGuysMovement : NetworkBehaviour
         // Play jump animation, sound, particle effect
     }
 
-    [Command]
+[Command]
     private void CmdOnDive()
     {
         RpcOnDive();
@@ -493,7 +493,7 @@ public class FallGuysMovement : NetworkBehaviour
 
     [ClientRpc]
     private void RpcOnDive()
-    {
+    {    
         // Play dive animation, sound, particle effect
     }
 

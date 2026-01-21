@@ -11,4 +11,9 @@ public class Coin : NetworkBehaviour
         var col = GetComponent<Collider>();
         if (col != null) col.isTrigger = true;
     }
+
+    public override void OnStartClient()
+    {
+        Debug.Log($"[CLIENT][Coin] Spawned netId={netId} at {transform.position}");
+    }
 }

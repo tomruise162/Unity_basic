@@ -23,28 +23,16 @@ public class CoinSpawner : NetworkBehaviour
             return;
         }
 
-        // Logic moi: Lay vi tri tu spawnRoot hoac list spawnPoints
-        List<Transform> finalPoints = new List<Transform>(spawnPoints);
-
-        // 1. Neu co spawnRoot, them tat ca children cua no vao list
-        if (spawnRoot != null)
-        {
-            foreach (Transform child in spawnRoot)
-            {
-                if (child != null) finalPoints.Add(child);
-            }
-        }
-
-        if (finalPoints.Count == 0)
+        if (spawnPoints.Count == 0)
         {
             Debug.LogWarning("[SERVER][CoinSpawner] No spawn points found! Assign 'Spawn Root' or populate 'Spawn Points'.");
             return;
         }
 
-        Debug.Log($"[SERVER][CoinSpawner] Found {finalPoints.Count} spawn points. Spawning coins...");
+        Debug.Log($"[SERVER][CoinSpawner] Found {spawnPoints.Count} spawn points. Spawning coins...");
 
         // 2. Spawn coin tai tung vi tri
-        foreach (var point in finalPoints)
+        foreach (var point in spawnPoints)
         {
             if (point == null) continue;
 

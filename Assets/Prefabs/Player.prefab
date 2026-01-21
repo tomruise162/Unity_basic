@@ -250,11 +250,11 @@ MonoBehaviour:
   rotationSpeed: 720
   jumpForce: 8
   groundCheck: {fileID: 3940160918648426485}
-  groundCheckRadius: 0.15
+  groundCheckRadius: 0.25
   groundMask:
     serializedVersion: 2
     m_Bits: 128
-  jumpBufferTime: 0.15
+  jumpBufferTime: 0.3
   coyoteTime: 0.1
   diveForce: 12
   diveCooldown: 1

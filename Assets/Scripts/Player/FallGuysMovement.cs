@@ -49,6 +49,17 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private Transform cameraTransform;
 
     [Header("Coin System")]
+    // SyncVar là biến:
+    // Chỉ được thay đổi trên Server
+    // Tự động sync giá trị xuống tất cả Client
+    // Client không được set trực tiếp
+
+    // Hook là hàm được gọi trên client khi giá trị SyncVar thay đổi:
+    // Được gọi sau khi server gửi giá trị mới:
+    // Giúp:
+    // Update UI
+    // Play animation / sound
+    // Trigger effect
     [SyncVar(hook = nameof(OnCoinCountChanged))]
     public int coinCount = 0;
 
@@ -301,7 +312,7 @@ public class FallGuysMovement : NetworkBehaviour
 
         if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.LeftControl))
             divePressed = true;
-
+        // Lấy camera main làm camera của player
         if (cameraTransform == null && Camera.main != null)
             cameraTransform = Camera.main.transform;
     }
@@ -379,6 +390,9 @@ public class FallGuysMovement : NetworkBehaviour
         if (!isGrounded)
             accelRate *= airControlMultiplier;
 
+        // Only change horizontal velocity, the vertical (y) velocity 
+        // is controlled by physics of function PerformJump
+        // 
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         Vector3 newHorizontalVel = Vector3.MoveTowards(
             horizontalVel,
@@ -386,9 +400,16 @@ public class FallGuysMovement : NetworkBehaviour
             accelRate * Time.fixedDeltaTime
         );
 
+        // Apply the new horizontal velocity while keeping the current vertical velocity
         rb.linearVelocity = new Vector3(newHorizontalVel.x, rb.linearVelocity.y, newHorizontalVel.z);
-    }
 
+        // TODO: Hoi Alvis
+        // rb.linearVelocity = Vector3.MoveTowards(
+        //     rb.linearVelocity,
+        //     targetVelocity,
+        //     accelRate * Time.fixedDeltaTime);
+    }
+    
     [Client]
     private void ApplyRotation()
     {
@@ -396,7 +417,7 @@ public class FallGuysMovement : NetworkBehaviour
 
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (horizontalVel.sqrMagnitude < 0.01f) return;
-
+        
         Quaternion targetRot = Quaternion.LookRotation(horizontalVel.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
@@ -408,6 +429,7 @@ public class FallGuysMovement : NetworkBehaviour
     [Client]
     private void PerformJump()
     {
+        // Reset vertical velocity before jumping
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
         CmdOnJump();
@@ -456,6 +478,7 @@ public class FallGuysMovement : NetworkBehaviour
         RpcOnJump();
     }
 
+    // Remote Procedure Call
     [ClientRpc]
     private void RpcOnJump()
     {

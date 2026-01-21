@@ -14,8 +14,9 @@ public class CoinSpawner : NetworkBehaviour
     [Tooltip("Hoac keo thu cong tung vi tri vao list nay")]
     public List<Transform> spawnPoints = new List<Transform>();
 
-    public override void OnStartServer()
+    public override void OnStartClient()
     {
+        base.OnStartClient();
         if (coinPrefab == null)
         {
             Debug.LogError("[SERVER][CoinSpawner] coinPrefab is NOT assigned. No coins will spawn.");

@@ -38,14 +38,14 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private float diveCooldown = 1f;
 
     [Header("Physics Feel")]
-    [Tooltip("Them luc keo xuong khi dang roi de cam giac 'nang' hon")]
+    [Tooltip("Add downward force when falling for a 'heavier' feel")]
     [SerializeField] private float fallMultiplier = 2.5f;
 
-    [Tooltip("Khi nha nut nhay som, roi nhanh hon")]
+    [Tooltip("Fall faster when the jump button is released early")]
     [SerializeField] private float lowJumpMultiplier = 2f;
 
     [Header("Camera Reference (Client Only)")]
-    [Tooltip("Camera hoac pivot yaw. Neu de trong, local player se tu lay Camera.main.")]
+    [Tooltip("Camera or pivot yaw. If empty, local player will automatically use Camera.main.")]
     [SerializeField] private Transform cameraTransform;
 
     [Header("Coin System")]
@@ -98,7 +98,7 @@ public class FallGuysMovement : NetworkBehaviour
     public override void OnStartClient()
     {
         base.OnStartClient();
-        
+
         // Đổi màu cho REMOTE players (máy người khác)
         if (!isLocalPlayer)
         {
@@ -109,7 +109,7 @@ public class FallGuysMovement : NetworkBehaviour
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
-        
+
         // Verify NetworkTransform config
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
         if (networkTransform == null)
@@ -120,32 +120,32 @@ public class FallGuysMovement : NetworkBehaviour
         {
             Debug.LogError($"[LOCAL] NetworkTransform syncDirection must be ClientToServer! Current: {networkTransform.syncDirection}");
         }
-        
+
         // Disable NetworkRigidbody nếu có (không cần với Client Authority)
         var networkRigidbodyReliable = GetComponent<Mirror.NetworkRigidbodyReliable>();
         var networkRigidbodyUnreliable = GetComponent<Mirror.NetworkRigidbodyUnreliable>();
-        
+
         if (networkRigidbodyReliable != null)
         {
             networkRigidbodyReliable.enabled = false;
             Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyReliable - not needed with Client Authority");
         }
-        
+
         if (networkRigidbodyUnreliable != null)
         {
             networkRigidbodyUnreliable.enabled = false;
             Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyUnreliable - not needed with Client Authority");
         }
-        
+
         // Đảm bảo Rigidbody không bị kinematic
         rb.isKinematic = false;
-        
+
         // Auto-assign camera if not set
         if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
         }
-        
+
         // Đổi màu cho local player
         ChangePlayerColor(Color.green);
     }
@@ -191,12 +191,19 @@ public class FallGuysMovement : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        Debug.Log($"[CLIENT] OnTriggerEnter: {other.gameObject.name}, tag={other.tag}, isLocalPlayer={isLocalPlayer}");
+
         if (!isLocalPlayer) return;
         if (!other.CompareTag("Coin")) return;
 
         NetworkIdentity coinNi = other.GetComponent<NetworkIdentity>();
-        if (coinNi == null) return;
+        if (coinNi == null)
+        {
+            Debug.LogError($"[CLIENT] Coin has no NetworkIdentity!");
+            return;
+        }
 
+        Debug.Log($"[CLIENT] Calling CmdPickupCoin for netId={coinNi.netId}");
         CmdPickupCoin(coinNi.netId);
     }
 
@@ -409,7 +416,7 @@ public class FallGuysMovement : NetworkBehaviour
         //     targetVelocity,
         //     accelRate * Time.fixedDeltaTime);
     }
-    
+
     [Client]
     private void ApplyRotation()
     {
@@ -417,7 +424,7 @@ public class FallGuysMovement : NetworkBehaviour
 
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (horizontalVel.sqrMagnitude < 0.01f) return;
-        
+
         Quaternion targetRot = Quaternion.LookRotation(horizontalVel.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
@@ -485,7 +492,7 @@ public class FallGuysMovement : NetworkBehaviour
         // Play jump animation, sound, particle effect
     }
 
-[Command]
+    [Command]
     private void CmdOnDive()
     {
         RpcOnDive();
@@ -493,7 +500,7 @@ public class FallGuysMovement : NetworkBehaviour
 
     [ClientRpc]
     private void RpcOnDive()
-    {    
+    {
         // Play dive animation, sound, particle effect
     }
 

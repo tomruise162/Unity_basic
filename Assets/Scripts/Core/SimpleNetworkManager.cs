@@ -19,7 +19,7 @@ public class SimpleNetworkManager : NetworkManager
     // public Transform SpawnPoint => spawnPoint; // read-only property if you need it in code
 
     [Header("Spawn Settings")]
-    [Tooltip("Cac vi tri spawn player, neu khong co se spawn tai Vector3.zero")]
+    [Tooltip("Player spawn positions; if empty, will spawn at Vector3.zero")]
     public Transform[] spawnPoints;
 
     public override void Awake()

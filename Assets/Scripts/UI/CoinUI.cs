@@ -24,7 +24,7 @@ public class CoinUI : MonoBehaviour
     public TextMeshProUGUI coinText;
 
     [Header("Settings")]
-    [Tooltip("True = dung polling (Update), False = dung event")]
+    [Tooltip("True = use polling (Update), False = use event")]
     public bool usePolling = true;
 
     private PlayerNetwork localPlayer;

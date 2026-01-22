@@ -17,7 +17,7 @@ using Mirror;
 public class FallGuysCamera : MonoBehaviour
 {
     [Header("Target")]
-    [Tooltip("Se tu dong tim local player neu de trong")]
+    [Tooltip("Will automatically find local player if left empty")]
     public Transform target;
 
     [Header("Distance")]

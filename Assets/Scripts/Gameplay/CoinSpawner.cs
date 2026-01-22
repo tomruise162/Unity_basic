@@ -8,30 +8,53 @@ public class CoinSpawner : NetworkBehaviour
     public GameObject coinPrefab;
 
     [Header("Spawn Settings")]
-    [Tooltip("Keo object cha chua cac spawn points vao day (Script se tu dong lay children)")]
+    [Tooltip("Drag the parent object containing spawn points here (Script will automatically get children)")]
     public Transform spawnRoot;
 
-    [Tooltip("Hoac keo thu cong tung vi tri vao list nay")]
+    [Tooltip("Or manually drag each position into this list")]
     public List<Transform> spawnPoints = new List<Transform>();
 
-    public override void OnStartClient()
+    private void Awake()
     {
-        base.OnStartClient();
+        // Populate spawn points from children
+        if (spawnPoints.Count == 0 && spawnRoot != null)
+        {
+            foreach (Transform child in spawnRoot)
+            {
+                spawnPoints.Add(child);
+            }
+            Debug.Log($"[CoinSpawner] Found {spawnPoints.Count} spawn points under {spawnRoot.name}");
+        }
+    }
+
+    // FIXED: Changed from OnStartClient to OnStartServer
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+
         if (coinPrefab == null)
         {
-            Debug.LogError("[SERVER][CoinSpawner] coinPrefab is NOT assigned. No coins will spawn.");
+            Debug.LogError("[SERVER][CoinSpawner] coinPrefab is NOT assigned!");
             return;
+        }
+
+        // Auto-populate from spawnRoot if needed
+        if (spawnPoints.Count == 0 && spawnRoot != null)
+        {
+            foreach (Transform child in spawnRoot)
+            {
+                spawnPoints.Add(child);
+            }
         }
 
         if (spawnPoints.Count == 0)
         {
-            Debug.LogWarning("[SERVER][CoinSpawner] No spawn points found! Assign 'Spawn Root' or populate 'Spawn Points'.");
+            Debug.LogWarning("[SERVER][CoinSpawner] No spawn points found!");
             return;
         }
 
-        Debug.Log($"[SERVER][CoinSpawner] Found {spawnPoints.Count} spawn points. Spawning coins...");
+        Debug.Log($"[SERVER][CoinSpawner] Spawning {spawnPoints.Count} coins...");
 
-        // 2. Spawn coin tai tung vi tri
         foreach (var point in spawnPoints)
         {
             if (point == null) continue;
@@ -39,9 +62,7 @@ public class CoinSpawner : NetworkBehaviour
             GameObject coin = Instantiate(coinPrefab, point.position, Quaternion.identity);
             NetworkServer.Spawn(coin);
 
-            // Debug check
-            // if (coin.TryGetComponent<NetworkIdentity>(out var ni))
-            //    Debug.Log($"[SERVER] Spawned coin netId={ni.netId}");
+            // Debug.Log($"[SERVER] Spawned coin at {point.position}");
         }
     }
 }

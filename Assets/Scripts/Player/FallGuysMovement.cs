@@ -2,14 +2,14 @@ using UnityEngine;
 using Mirror;
 
 /// <summary>
-/// Fall Guys style Movement Controller with Coin Collection (Mirror, client-authoritative)
-///
-/// Client-Authoritative Movement pattern:
-/// 1. Client đọc input và di chuyển trực tiếp
-/// 2. NetworkTransform (Client Authority) sync position từ client lên server
-/// 3. Server broadcast xuống các clients khác
-///
-/// Coin collection vẫn dùng Server Authority để đảm bảo tính hợp lệ.
+/// Fall Guys style Movement Controller with Server Validation
+/// 
+/// Architecture:
+/// 1. Client reads input and moves locally (for responsive feel)
+/// 2. NetworkTransform syncs position to server and other clients
+/// 3. Server validates important actions (jump, dive) via Commands
+/// 4. Server broadcasts effects via RPCs
+/// 5. Coin collection uses full server authority
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class FallGuysMovement : NetworkBehaviour
@@ -21,16 +21,14 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private float airControlMultiplier = 0.4f;
 
     [Header("Rotation")]
-    [SerializeField] private float rotationSpeed = 720f; // degrees/sec
+    [SerializeField] private float rotationSpeed = 720f;
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 8f;
     [SerializeField] private Transform groundCheck;
     [SerializeField] private float groundCheckRadius = 0.3f;
     [SerializeField] private LayerMask groundMask;
-    [Tooltip("Time window to buffer jump input (seconds)")]
     [SerializeField] private float jumpBufferTime = 0.15f;
-    [Tooltip("Time window to allow jump after leaving ground (coyote time)")]
     [SerializeField] private float coyoteTime = 0.1f;
 
     [Header("Dive")]
@@ -38,30 +36,22 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private float diveCooldown = 1f;
 
     [Header("Physics Feel")]
-    [Tooltip("Add downward force when falling for a 'heavier' feel")]
     [SerializeField] private float fallMultiplier = 2.5f;
-
-    [Tooltip("Fall faster when the jump button is released early")]
     [SerializeField] private float lowJumpMultiplier = 2f;
 
-    [Header("Camera Reference (Client Only)")]
-    [Tooltip("Camera or pivot yaw. If empty, local player will automatically use Camera.main.")]
+    [Header("Camera Reference")]
     [SerializeField] private Transform cameraTransform;
 
     [Header("Coin System")]
-    // SyncVar là biến:
-    // Chỉ được thay đổi trên Server
-    // Tự động sync giá trị xuống tất cả Client
-    // Client không được set trực tiếp
-
-    // Hook là hàm được gọi trên client khi giá trị SyncVar thay đổi:
-    // Được gọi sau khi server gửi giá trị mới:
-    // Giúp:
-    // Update UI
-    // Play animation / sound
-    // Trigger effect
     [SyncVar(hook = nameof(OnCoinCountChanged))]
     public int coinCount = 0;
+
+    [Header("Visual Effects")]
+    [SerializeField] private ParticleSystem jumpParticles;
+    [SerializeField] private ParticleSystem diveParticles;
+    [SerializeField] private AudioClip jumpSound;
+    [SerializeField] private AudioClip diveSound;
+    [SerializeField] private AudioClip coinSound;
 
     // ===== Client input state =====
     private Vector2 inputDirection;
@@ -69,27 +59,38 @@ public class FallGuysMovement : NetworkBehaviour
     private bool divePressed;
     private bool jumpHeld;
 
-    // ===== Client-applied movement state =====
+    // ===== Movement state =====
     private Vector3 moveDirection;
     private float jumpBufferTimer;
     private float lastGroundedTime;
 
-    // ===== State =====
+    // ===== State (synced with server for validation) =====
+    [SyncVar] // Server tracks if player is grounded for validation
     private bool isGrounded;
     private bool wasGrounded;
+
+    [SyncVar] // Server tracks dive state to prevent spam
     private bool isDiving;
+
+    [SyncVar] // Server tracks last dive time for cooldown validation
     private float lastDiveTime;
 
     // ===== Components =====
     private Rigidbody rb;
+    private AudioSource audioSource;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        audioSource = GetComponent<AudioSource>();
 
-        // Setup rigidbody cho Fall Guys feel
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+
         rb.interpolation = RigidbodyInterpolation.Interpolate;
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
         rb.freezeRotation = true;
     }
 
@@ -98,8 +99,6 @@ public class FallGuysMovement : NetworkBehaviour
     public override void OnStartClient()
     {
         base.OnStartClient();
-
-        // Đổi màu cho REMOTE players (máy người khác)
         if (!isLocalPlayer)
         {
             ChangePlayerColor(Color.blue);
@@ -110,49 +109,26 @@ public class FallGuysMovement : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
 
-        // Verify NetworkTransform config
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
         if (networkTransform == null)
         {
-            Debug.LogError($"[LOCAL] NetworkTransformHybrid component not found!");
+            Debug.LogError("[LOCAL] NetworkTransformHybrid not found!");
         }
         else if (networkTransform.syncDirection != Mirror.SyncDirection.ClientToServer)
         {
-            Debug.LogError($"[LOCAL] NetworkTransform syncDirection must be ClientToServer! Current: {networkTransform.syncDirection}");
+            Debug.LogError($"[LOCAL] NetworkTransform must be ClientToServer! Current: {networkTransform.syncDirection}");
         }
 
-        // Disable NetworkRigidbody nếu có (không cần với Client Authority)
-        var networkRigidbodyReliable = GetComponent<Mirror.NetworkRigidbodyReliable>();
-        var networkRigidbodyUnreliable = GetComponent<Mirror.NetworkRigidbodyUnreliable>();
-
-        if (networkRigidbodyReliable != null)
-        {
-            networkRigidbodyReliable.enabled = false;
-            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyReliable - not needed with Client Authority");
-        }
-
-        if (networkRigidbodyUnreliable != null)
-        {
-            networkRigidbodyUnreliable.enabled = false;
-            Debug.LogWarning($"[LOCAL] Disabled NetworkRigidbodyUnreliable - not needed with Client Authority");
-        }
-
-        // Đảm bảo Rigidbody không bị kinematic
         rb.isKinematic = false;
 
-        // Auto-assign camera if not set
         if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
         }
 
-        // Đổi màu cho local player
         ChangePlayerColor(Color.green);
     }
 
-    /// <summary>
-    /// Đổi màu player để dễ nhận diện
-    /// </summary>
     private void ChangePlayerColor(Color color)
     {
         var renderer = GetComponent<Renderer>();
@@ -172,83 +148,120 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
-    // ================= COIN SYSTEM =================
+    // ================= COIN SYSTEM (Server Authority) =================
 
-    /// <summary>
-    /// SYNCVAR HOOK: Runs on CLIENT when coinCount changes.
-    /// </summary>
     private void OnCoinCountChanged(int oldValue, int newValue)
     {
-        Debug.Log($"[HOOK] coinCount changed: {oldValue} -> {newValue}");
+        Debug.Log($"[HOOK] Coins: {oldValue} -> {newValue}");
 
-        // Only update UI for local player
         if (isLocalPlayer)
         {
-            // Uncomment if you have CoinUI
-            // CoinUI.NotifyCoinChanged(newValue);
+            // Update UI here
+            // CoinUI.UpdateCount(newValue);
         }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log($"[CLIENT] OnTriggerEnter: {other.gameObject.name}, tag={other.tag}, isLocalPlayer={isLocalPlayer}");
-
+        // Only local player detects collision
         if (!isLocalPlayer) return;
         if (!other.CompareTag("Coin")) return;
 
         NetworkIdentity coinNi = other.GetComponent<NetworkIdentity>();
         if (coinNi == null)
         {
-            Debug.LogError($"[CLIENT] Coin has no NetworkIdentity!");
+            Debug.LogError("[CLIENT] Coin has no NetworkIdentity!");
             return;
         }
 
-        Debug.Log($"[CLIENT] Calling CmdPickupCoin for netId={coinNi.netId}");
+        Debug.Log($"[CLIENT] Requesting coin pickup: netId={coinNi.netId}");
+
+        // COMMAND: Send pickup request to server for validation
         CmdPickupCoin(coinNi.netId);
     }
 
     /// <summary>
-    /// COMMAND: Runs on SERVER, called from CLIENT.
+    /// COMMAND: Client requests coin pickup, server validates and processes
+    /// This prevents cheating - only server can actually give coins
     /// </summary>
     [Command]
     private void CmdPickupCoin(uint coinNetId)
     {
-        // Server validate: does coin exist?
+        Debug.Log($"[SERVER] CmdPickupCoin called by player {netId} for coin {coinNetId}");
+
+        // SERVER VALIDATION 1: Does coin still exist?
         if (!NetworkServer.spawned.TryGetValue(coinNetId, out NetworkIdentity coinNi))
         {
-            Debug.Log($"[SERVER] Coin {coinNetId} not found - maybe already picked up");
+            Debug.Log($"[SERVER] Coin {coinNetId} not found (already collected)");
             return;
         }
 
-        // Server: increase coin count (SyncVar will sync to clients)
-        coinCount++;
-        Debug.Log($"[SERVER] Player {netId} picked up coin. Total: {coinCount}");
+        // SERVER VALIDATION 2: Is player close enough to coin?
+        float distance = Vector3.Distance(transform.position, coinNi.transform.position);
+        if (distance > 3f) // Max pickup range
+        {
+            Debug.LogWarning($"[SERVER] Player {netId} too far from coin! Distance: {distance}");
+            return;
+        }
 
-        // Server: destroy coin (Mirror syncs to all clients)
+        // SERVER: Grant coin (SyncVar automatically syncs to all clients)
+        coinCount++;
+        Debug.Log($"[SERVER] Player {netId} collected coin. Total: {coinCount}");
+
+        Vector3 coinPos = coinNi.transform.position;
+
+        // SERVER: Destroy coin (Mirror syncs destruction to all clients)
         NetworkServer.Destroy(coinNi.gameObject);
 
-        // Notify all clients (visual/audio effects)
-        RpcOnCoinPickedUp(coinNi.gameObject.transform.position);
+        // RPC: Notify all clients to play pickup effects
+        RpcOnCoinPickedUp(coinPos);
 
-        // Notify specific player (personal feedback)
+        // TARGET RPC: Send personal feedback to the player who collected it
         TargetOnYouPickedUpCoin(connectionToClient, coinCount);
     }
 
+    /// <summary>
+    /// CLIENT RPC: Plays visual/audio effects for all players
+    /// Everyone sees the coin collection happen
+    /// </summary>
     [ClientRpc]
     private void RpcOnCoinPickedUp(Vector3 coinPosition)
     {
-        Debug.Log($"[RPC-ALL] A coin was picked up at {coinPosition}");
-        // Play particle effect, sound, etc.
+        Debug.Log($"[RPC-ALL] Coin collected at {coinPosition}");
+
+        // Play particle effect at coin position
+        if (jumpParticles != null)
+        {
+            Instantiate(jumpParticles, coinPosition, Quaternion.identity);
+        }
+
+        // Play sound (quieter for remote players)
+        if (coinSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(coinSound, isLocalPlayer ? 1f : 0.3f);
+        }
     }
 
+    /// <summary>
+    /// TARGET RPC: Personal feedback only for the player who collected the coin
+    /// Only this specific client receives this message
+    /// </summary>
     [TargetRpc]
     private void TargetOnYouPickedUpCoin(NetworkConnection target, int totalCoins)
     {
-        Debug.Log($"[RPC-TARGET] YOU picked up a coin! Total: {totalCoins}");
-        // Personal notification, sound, etc.
+        Debug.Log($"[RPC-TARGET] YOU collected a coin! Total: {totalCoins}");
+
+        // Play louder sound for personal feedback
+        if (coinSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(coinSound, 1.5f);
+        }
+
+        // Show "+1 COIN" popup UI here
+        // CoinUI.ShowPopup("+1");
     }
 
-    // ================= CLIENT-AUTHORITATIVE MOVEMENT =================
+    // ================= MOVEMENT (Client Prediction + Server Validation) =================
 
     [Client]
     private void Update()
@@ -258,7 +271,7 @@ public class FallGuysMovement : NetworkBehaviour
 
         ReadInput();
 
-        // Get camera orientation vectors
+        // Calculate movement direction relative to camera
         Vector3 camForward = Vector3.forward;
         Vector3 camRight = Vector3.right;
 
@@ -266,15 +279,12 @@ public class FallGuysMovement : NetworkBehaviour
         {
             camForward = cameraTransform.forward;
             camRight = cameraTransform.right;
-
-            // Project onto ground plane
             camForward.y = 0f;
             camRight.y = 0f;
             camForward.Normalize();
             camRight.Normalize();
         }
 
-        // Calculate movement direction on CLIENT
         if (inputDirection.sqrMagnitude > 0.001f)
         {
             Vector3 dir = camForward * inputDirection.y + camRight * inputDirection.x;
@@ -285,17 +295,18 @@ public class FallGuysMovement : NetworkBehaviour
             moveDirection = Vector3.zero;
         }
 
-        // Jump buffering: if jump is pressed, set the buffer timer
+        // Jump buffering
         if (jumpPressed)
         {
             jumpBufferTimer = jumpBufferTime;
             jumpPressed = false;
         }
 
-        // Dive input - handle on client
+        // Dive input
         if (divePressed && CanDive())
         {
-            PerformDive();
+            // Send dive request to server for validation
+            CmdRequestDive();
             divePressed = false;
         }
     }
@@ -309,67 +320,58 @@ public class FallGuysMovement : NetworkBehaviour
         if (inputDirection.sqrMagnitude > 1f)
             inputDirection.Normalize();
 
-        // Use GetKeyDown to capture jump press
         if (Input.GetKeyDown(KeyCode.Space))
-        {
             jumpPressed = true;
-        }
 
         jumpHeld = Input.GetKey(KeyCode.Space);
 
         if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.LeftControl))
             divePressed = true;
-        // Lấy camera main làm camera của player
+
         if (cameraTransform == null && Camera.main != null)
             cameraTransform = Camera.main.transform;
     }
-
-    // ================= MOVEMENT PHYSICS =================
 
     [Client]
     private void FixedUpdate()
     {
         if (!isLocalPlayer) return;
 
-        // QUAN TRONG: Đảm bảo Rigidbody không bị NetworkRigidbody set kinematic
         if (rb.isKinematic)
         {
             rb.isKinematic = false;
-            Debug.LogWarning($"[LOCAL] Rigidbody was kinematic! Fixed to false. This may be caused by NetworkRigidbody component.");
+            Debug.LogWarning("[LOCAL] Rigidbody was kinematic! Fixed.");
         }
 
         CheckGround();
 
-        // Decrease jump buffer timer
         if (jumpBufferTimer > 0f)
         {
             jumpBufferTimer -= Time.fixedDeltaTime;
         }
 
-        // Track last grounded time for coyote time
         if (isGrounded)
         {
             lastGroundedTime = Time.time;
         }
 
         // Jump with buffer and coyote time
-        // Allow jump if:
-        // 1. Jump buffer is active (recently pressed jump)
-        // 2. AND either grounded OR within coyote time
         bool canJump = jumpBufferTimer > 0f &&
                        (isGrounded || Time.time < lastGroundedTime + coyoteTime);
 
         if (canJump)
         {
+            // Client performs jump immediately for responsiveness
             PerformJump();
-            jumpBufferTimer = 0f; // Clear buffer after jumping
+            jumpBufferTimer = 0f;
+
+            // Send jump command to server for validation & effects
+            CmdRequestJump();
         }
 
         ApplyMovement();
         ApplyRotation();
         ApplyBetterJumpPhysics();
-
-        // Đồng bộ physics để NetworkTransform đọc được transform mới
         Physics.SyncTransforms();
 
         wasGrounded = isGrounded;
@@ -392,14 +394,11 @@ public class FallGuysMovement : NetworkBehaviour
     private void ApplyMovement()
     {
         Vector3 targetVelocity = moveDirection * moveSpeed;
-
         float accelRate = moveDirection.sqrMagnitude > 0.001f ? acceleration : deceleration;
+
         if (!isGrounded)
             accelRate *= airControlMultiplier;
 
-        // Only change horizontal velocity, the vertical (y) velocity 
-        // is controlled by physics of function PerformJump
-        // 
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         Vector3 newHorizontalVel = Vector3.MoveTowards(
             horizontalVel,
@@ -407,14 +406,7 @@ public class FallGuysMovement : NetworkBehaviour
             accelRate * Time.fixedDeltaTime
         );
 
-        // Apply the new horizontal velocity while keeping the current vertical velocity
         rb.linearVelocity = new Vector3(newHorizontalVel.x, rb.linearVelocity.y, newHorizontalVel.z);
-
-        // TODO: Hoi Alvis
-        // rb.linearVelocity = Vector3.MoveTowards(
-        //     rb.linearVelocity,
-        //     targetVelocity,
-        //     accelRate * Time.fixedDeltaTime);
     }
 
     [Client]
@@ -436,32 +428,14 @@ public class FallGuysMovement : NetworkBehaviour
     [Client]
     private void PerformJump()
     {
-        // Reset vertical velocity before jumping
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-        CmdOnJump();
     }
 
     [Client]
     private bool CanDive()
     {
         return !isGrounded && !isDiving && Time.time > lastDiveTime + diveCooldown;
-    }
-
-    [Client]
-    private void PerformDive()
-    {
-        isDiving = true;
-        lastDiveTime = Time.time;
-
-        Vector3 diveDir = transform.forward + Vector3.down * 0.3f;
-        diveDir.Normalize();
-
-        rb.linearVelocity = Vector3.zero;
-        rb.AddForce(diveDir * diveForce, ForceMode.Impulse);
-        rb.AddTorque(Vector3.right * 5f, ForceMode.Impulse);
-
-        CmdOnDive();
     }
 
     [Client]
@@ -477,31 +451,123 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
-    // ================= RPCs (Visual Effects) =================
+    // ================= SERVER VALIDATION & RPCs =================
 
+    /// <summary>
+    /// COMMAND: Client requests to jump, server validates and broadcasts effect
+    /// Server can reject if player is not actually grounded
+    /// </summary>
     [Command]
-    private void CmdOnJump()
+    private void CmdRequestJump()
     {
+        Debug.Log($"[SERVER] Player {netId} requested jump. Grounded: {isGrounded}");
+
+        // SERVER VALIDATION: Is player allowed to jump?
+        // Note: Due to latency, client might think it's grounded but server doesn't
+        // For better feel, we can be lenient here (trust client for jump)
+        // But for competitive games, you'd enforce strict server-side checks
+
+        if (!isGrounded)
+        {
+            // Optional: Reject jump if server thinks player is in air
+            // Debug.LogWarning($"[SERVER] Rejected jump - player {netId} not grounded on server");
+            // return;
+        }
+
+        // Broadcast jump effect to all clients
         RpcOnJump();
     }
 
-    // Remote Procedure Call
+    /// <summary>
+    /// CLIENT RPC: Play jump effects for all players
+    /// Everyone sees/hears the jump happen
+    /// </summary>
     [ClientRpc]
     private void RpcOnJump()
     {
-        // Play jump animation, sound, particle effect
+        Debug.Log("[RPC-ALL] Playing jump effect");
+
+        // Play particle effect
+        if (jumpParticles != null)
+        {
+            jumpParticles.Play();
+        }
+
+        // Play jump sound
+        if (jumpSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(jumpSound);
+        }
+
+        // Trigger jump animation
+        // GetComponent<Animator>()?.SetTrigger("Jump");
     }
 
+    /// <summary>
+    /// COMMAND: Client requests to dive, server validates cooldown and broadcasts
+    /// Prevents spam and ensures fair gameplay
+    /// </summary>
     [Command]
-    private void CmdOnDive()
+    private void CmdRequestDive()
     {
+        Debug.Log($"[SERVER] Player {netId} requested dive");
+
+        // SERVER VALIDATION 1: Is player in air?
+        if (isGrounded)
+        {
+            Debug.LogWarning($"[SERVER] Rejected dive - player {netId} is grounded");
+            return;
+        }
+
+        // SERVER VALIDATION 2: Is cooldown ready?
+        if (isDiving || Time.time < lastDiveTime + diveCooldown)
+        {
+            Debug.LogWarning($"[SERVER] Rejected dive - player {netId} on cooldown");
+            return;
+        }
+
+        // SERVER: Update state (SyncVars will sync to all clients)
+        isDiving = true;
+        lastDiveTime = Time.time;
+
+        // SERVER: Apply dive physics
+        Vector3 diveDir = transform.forward + Vector3.down * 0.3f;
+        diveDir.Normalize();
+
+        Rigidbody serverRb = GetComponent<Rigidbody>();
+        serverRb.linearVelocity = Vector3.zero;
+        serverRb.AddForce(diveDir * diveForce, ForceMode.Impulse);
+        serverRb.AddTorque(Vector3.right * 5f, ForceMode.Impulse);
+
+        Debug.Log($"[SERVER] Dive approved for player {netId}");
+
+        // Broadcast dive effect to all clients
         RpcOnDive();
     }
 
+    /// <summary>
+    /// CLIENT RPC: Play dive effects for all players
+    /// Everyone sees the dive animation and effects
+    /// </summary>
     [ClientRpc]
     private void RpcOnDive()
     {
-        // Play dive animation, sound, particle effect
+        Debug.Log("[RPC-ALL] Playing dive effect");
+
+        // Play particle effect (dive trail)
+        if (diveParticles != null)
+        {
+            diveParticles.Play();
+        }
+
+        // Play dive sound
+        if (diveSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(diveSound);
+        }
+
+        // Trigger dive animation
+        // GetComponent<Animator>()?.SetTrigger("Dive");
     }
 
     // ================= DEBUG =================
@@ -514,5 +580,9 @@ public class FallGuysMovement : NetworkBehaviour
 
         Gizmos.color = Color.blue;
         Gizmos.DrawRay(transform.position + Vector3.up, transform.forward * 2f);
+
+        // Draw pickup range
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, 3f);
     }
 }

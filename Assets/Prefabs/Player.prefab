@@ -13,11 +13,9 @@ GameObject:
   - component: {fileID: 5396032893784427044}
   - component: {fileID: 4778700563665927924}
   - component: {fileID: 5693310348008720758}
-  - component: {fileID: -2954261927603760534}
   - component: {fileID: 822403597872660822}
   - component: {fileID: 2032970469024525095}
   - component: {fileID: 8831643101765257270}
-  - component: {fileID: 2710048465216618951}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -144,40 +142,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 80
   m_CollisionDetection: 0
---- !u!114 &-2954261927603760534
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3982184379949828128}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb803efbe62c34d7baece46c9ffebad9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
-  target: {fileID: 6466129114426683921}
-  syncPosition: 1
-  syncRotation: 1
-  syncScale: 0
-  onlySyncOnChange: 1
-  compressRotation: 1
-  interpolatePosition: 1
-  interpolateRotation: 1
-  interpolateScale: 1
-  coordinateSpace: 0
-  timelineOffset: 1
-  showGizmos: 0
-  showOverlay: 0
-  overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
-  onlySyncOnChangeCorrectionMultiplier: 2
-  useFixedUpdate: 1
-  rotationSensitivity: 0.01
-  positionPrecision: 0.01
-  scalePrecision: 0.01
 --- !u!114 &822403597872660822
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -262,39 +226,11 @@ MonoBehaviour:
   lowJumpMultiplier: 2
   cameraTransform: {fileID: 0}
   coinCount: 0
---- !u!114 &2710048465216618951
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3982184379949828128}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8f63ea2e505fd484193fb31c5c55ca73, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  syncDirection: 1
-  syncMode: 0
-  syncInterval: 0.033333335
-  baselineRate: 1
-  unreliableRedundancy: 0
-  baselineIsDelta: 1
-  debugLog: 0
-  useFixedUpdate: 0
-  target: {fileID: 6466129114426683921}
-  bufferSizeLimit: 64
-  sendRate: 30
-  positionSensitivity: 0.01
-  rotationSensitivity: 0.01
-  scaleSensitivity: 0.01
-  syncPosition: 1
-  syncRotation: 1
-  syncScale: 0
-  debugDraw: 0
-  showGizmos: 0
-  showOverlay: 0
-  overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
+  jumpParticles: {fileID: 0}
+  diveParticles: {fileID: 0}
+  jumpSound: {fileID: 0}
+  diveSound: {fileID: 0}
+  coinSound: {fileID: 0}
 --- !u!1 &5429438196211973985
 GameObject:
   m_ObjectHideFlags: 0

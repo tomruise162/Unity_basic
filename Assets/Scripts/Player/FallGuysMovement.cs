@@ -140,12 +140,14 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
+    // Khi chạm vào coin
     private void OnTriggerEnter(Collider other)
     {
-        // Only local player detects collision
+        // Chỉ local player detect collision
         if (!isLocalPlayer) return;
         if (!other.CompareTag("Coin")) return;
 
+        // Lấy NetworkIdentity của coin để gửi lên server
         NetworkIdentity coinNi = other.GetComponent<NetworkIdentity>();
         if (coinNi == null)
         {

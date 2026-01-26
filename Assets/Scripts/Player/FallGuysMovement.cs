@@ -63,6 +63,9 @@ public class FallGuysMovement : NetworkBehaviour
         rb = GetComponent<Rigidbody>();
 
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        // Sử dụng check collision descrete để máy không phải xử lý liên tục.
+        // Tuy nhiên có những rủi ro trong các game yêu cầu collision chính xác.
+        // Ví dụ: game bắn súng, các game có skill dash/teleport, game đua xe,...
         rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
         rb.freezeRotation = true;
     }
@@ -82,6 +85,9 @@ public class FallGuysMovement : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
 
+        // Sử dụng Client auhtority với NetworkTransformHybrid
+        // Client gửi position, rotation, lên server
+        // Server sync với các clients khác 
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
         if (networkTransform == null)
         {
@@ -134,12 +140,14 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
+    // Khi chạm vào coin
     private void OnTriggerEnter(Collider other)
     {
-        // Only local player detects collision
+        // Chỉ local player detect collision
         if (!isLocalPlayer) return;
         if (!other.CompareTag("Coin")) return;
 
+        // Lấy NetworkIdentity của coin để gửi lên server
         NetworkIdentity coinNi = other.GetComponent<NetworkIdentity>();
         if (coinNi == null)
         {
@@ -204,6 +212,7 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
+    // Đọc input từ bàn phím và lưu lại
     private void ReadInput()
     {
         float h = Input.GetAxisRaw("Horizontal");

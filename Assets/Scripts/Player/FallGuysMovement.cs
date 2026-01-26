@@ -7,9 +7,8 @@ using Mirror;
 /// Architecture:
 /// 1. Client reads input and moves locally (for responsive feel)
 /// 2. NetworkTransform syncs position to server and other clients
-/// 3. Server validates important actions (jump, dive) via Commands
-/// 4. Server broadcasts effects via RPCs
-/// 5. Coin collection uses full server authority
+/// 3. Server validates important actions (jump) via Commands
+/// 4. Coin collection uses full server authority
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class FallGuysMovement : NetworkBehaviour
@@ -31,10 +30,6 @@ public class FallGuysMovement : NetworkBehaviour
     [SerializeField] private float jumpBufferTime = 0.15f;
     [SerializeField] private float coyoteTime = 0.1f;
 
-    [Header("Dive")]
-    [SerializeField] private float diveForce = 12f;
-    [SerializeField] private float diveCooldown = 1f;
-
     [Header("Physics Feel")]
     [SerializeField] private float fallMultiplier = 2.5f;
     [SerializeField] private float lowJumpMultiplier = 2f;
@@ -46,17 +41,9 @@ public class FallGuysMovement : NetworkBehaviour
     [SyncVar(hook = nameof(OnCoinCountChanged))]
     public int coinCount = 0;
 
-    [Header("Visual Effects")]
-    [SerializeField] private ParticleSystem jumpParticles;
-    [SerializeField] private ParticleSystem diveParticles;
-    [SerializeField] private AudioClip jumpSound;
-    [SerializeField] private AudioClip diveSound;
-    [SerializeField] private AudioClip coinSound;
-
     // ===== Client input state =====
     private Vector2 inputDirection;
     private bool jumpPressed;
-    private bool divePressed;
     private bool jumpHeld;
 
     // ===== Movement state =====
@@ -64,32 +51,21 @@ public class FallGuysMovement : NetworkBehaviour
     private float jumpBufferTimer;
     private float lastGroundedTime;
 
-    // ===== State (synced with server for validation) =====
-    [SyncVar] // Server tracks if player is grounded for validation
+    // ===== State =====
     private bool isGrounded;
     private bool wasGrounded;
 
-    [SyncVar] // Server tracks dive state to prevent spam
-    private bool isDiving;
-
-    [SyncVar] // Server tracks last dive time for cooldown validation
-    private float lastDiveTime;
-
     // ===== Components =====
     private Rigidbody rb;
-    private AudioSource audioSource;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        audioSource = GetComponent<AudioSource>();
-
-        if (audioSource == null)
-        {
-            audioSource = gameObject.AddComponent<AudioSource>();
-        }
 
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        // Sử dụng check collision descrete để máy không phải xử lý liên tục.
+        // Tuy nhiên có những rủi ro trong các game yêu cầu collision chính xác.
+        // Ví dụ: game bắn súng, các game có skill dash/teleport, game đua xe,...
         rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
         rb.freezeRotation = true;
     }
@@ -109,6 +85,9 @@ public class FallGuysMovement : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
 
+        // Sử dụng Client auhtority với NetworkTransformHybrid
+        // Client gửi position, rotation, lên server
+        // Server sync với các clients khác 
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
         if (networkTransform == null)
         {
@@ -208,60 +187,11 @@ public class FallGuysMovement : NetworkBehaviour
         coinCount++;
         Debug.Log($"[SERVER] Player {netId} collected coin. Total: {coinCount}");
 
-        Vector3 coinPos = coinNi.transform.position;
-
         // SERVER: Destroy coin (Mirror syncs destruction to all clients)
         NetworkServer.Destroy(coinNi.gameObject);
-
-        // RPC: Notify all clients to play pickup effects
-        RpcOnCoinPickedUp(coinPos);
-
-        // TARGET RPC: Send personal feedback to the player who collected it
-        TargetOnYouPickedUpCoin(connectionToClient, coinCount);
     }
 
-    /// <summary>
-    /// CLIENT RPC: Plays visual/audio effects for all players
-    /// Everyone sees the coin collection happen
-    /// </summary>
-    [ClientRpc]
-    private void RpcOnCoinPickedUp(Vector3 coinPosition)
-    {
-        Debug.Log($"[RPC-ALL] Coin collected at {coinPosition}");
-
-        // Play particle effect at coin position
-        if (jumpParticles != null)
-        {
-            Instantiate(jumpParticles, coinPosition, Quaternion.identity);
-        }
-
-        // Play sound (quieter for remote players)
-        if (coinSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(coinSound, isLocalPlayer ? 1f : 0.3f);
-        }
-    }
-
-    /// <summary>
-    /// TARGET RPC: Personal feedback only for the player who collected the coin
-    /// Only this specific client receives this message
-    /// </summary>
-    [TargetRpc]
-    private void TargetOnYouPickedUpCoin(NetworkConnection target, int totalCoins)
-    {
-        Debug.Log($"[RPC-TARGET] YOU collected a coin! Total: {totalCoins}");
-
-        // Play louder sound for personal feedback
-        if (coinSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(coinSound, 1.5f);
-        }
-
-        // Show "+1 COIN" popup UI here
-        // CoinUI.ShowPopup("+1");
-    }
-
-    // ================= MOVEMENT (Client Prediction + Server Validation) =================
+    // ================= MOVEMENT (Client Prediction) =================
 
     [Client]
     private void Update()
@@ -270,30 +200,7 @@ public class FallGuysMovement : NetworkBehaviour
         if (NetworkClient.connection == null || !NetworkClient.ready) return;
 
         ReadInput();
-
-        // Calculate movement direction relative to camera
-        Vector3 camForward = Vector3.forward;
-        Vector3 camRight = Vector3.right;
-
-        if (cameraTransform != null)
-        {
-            camForward = cameraTransform.forward;
-            camRight = cameraTransform.right;
-            camForward.y = 0f;
-            camRight.y = 0f;
-            camForward.Normalize();
-            camRight.Normalize();
-        }
-
-        if (inputDirection.sqrMagnitude > 0.001f)
-        {
-            Vector3 dir = camForward * inputDirection.y + camRight * inputDirection.x;
-            moveDirection = dir.sqrMagnitude > 1f ? dir.normalized : dir;
-        }
-        else
-        {
-            moveDirection = Vector3.zero;
-        }
+        UpdateMoveDirection();
 
         // Jump buffering
         if (jumpPressed)
@@ -301,16 +208,9 @@ public class FallGuysMovement : NetworkBehaviour
             jumpBufferTimer = jumpBufferTime;
             jumpPressed = false;
         }
-
-        // Dive input
-        if (divePressed && CanDive())
-        {
-            // Send dive request to server for validation
-            CmdRequestDive();
-            divePressed = false;
-        }
     }
 
+    // Đọc input từ bàn phím và lưu lại
     private void ReadInput()
     {
         float h = Input.GetAxisRaw("Horizontal");
@@ -325,11 +225,43 @@ public class FallGuysMovement : NetworkBehaviour
 
         jumpHeld = Input.GetKey(KeyCode.Space);
 
-        if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.LeftControl))
-            divePressed = true;
-
         if (cameraTransform == null && Camera.main != null)
             cameraTransform = Camera.main.transform;
+    }
+
+    // Tính hướng di chuyển theo hướng camera đang nhìn.
+    // Nếu không player sẽ luôn di chuyển theo hướng cố định của scene
+    // Ví dụ:
+    // Camera đang nhìn về phía Đông
+    // Bạn bấm W
+    // Nhân vật sẽ chạy về phía Đông (theo camera)
+    // NOTE: Trả lời cho câu hỏi đi đâu, đi theo hướng nào
+    private void UpdateMoveDirection()
+    {
+        Vector3 camForward = Vector3.forward;
+        Vector3 camRight = Vector3.right;
+
+        if (cameraTransform != null)
+        {
+            camForward = cameraTransform.forward;
+            camRight = cameraTransform.right;
+            camForward.y = 0f;
+            camRight.y = 0f;
+            // camForward.Normalize();
+            // camRight.Normalize();
+            // Debug.Log("Camera forward: " + camForward);
+            // Debug.Log("Camera right: " + camRight);
+        }
+
+        if (inputDirection.sqrMagnitude > 0.001f)
+        {
+            Vector3 dir = camForward * inputDirection.y + camRight * inputDirection.x;
+            moveDirection = dir.sqrMagnitude > 1f ? dir.normalized : dir;
+        }
+        else
+        {
+            moveDirection = Vector3.zero;
+        }
     }
 
     [Client]
@@ -361,12 +293,8 @@ public class FallGuysMovement : NetworkBehaviour
 
         if (canJump)
         {
-            // Client performs jump immediately for responsiveness
             PerformJump();
             jumpBufferTimer = 0f;
-
-            // Send jump command to server for validation & effects
-            CmdRequestJump();
         }
 
         ApplyMovement();
@@ -385,38 +313,48 @@ public class FallGuysMovement : NetworkBehaviour
             : transform.position + Vector3.down * 0.1f;
 
         isGrounded = Physics.CheckSphere(checkPos, groundCheckRadius, groundMask, QueryTriggerInteraction.Ignore);
-
-        if (isGrounded && isDiving)
-            isDiving = false;
     }
 
+    // Tạo logic di chuyển vật lý cho player
+    // NOTE: Trả lời cho câu hỏi di chuyển bằng logic gì
     [Client]
     private void ApplyMovement()
     {
+        // Vận tốc mà ta muốn đạt tới
         Vector3 targetVelocity = moveDirection * moveSpeed;
+        // Apply gia tốc/giảm tốc để làm mượt movement
         float accelRate = moveDirection.sqrMagnitude > 0.001f ? acceleration : deceleration;
 
         if (!isGrounded)
             accelRate *= airControlMultiplier;
 
+        // Lấy vận tốc hiện tại
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        // Sử dụng MoveTowards để đưa vận tốc hiện tại tới vận tốc mà ta muốn đạt tới
+        // Thay đổi dần theo mỗi đợt update vật lý (tick của FixedUpdate)
+        // Không thay đổi ngay lập tức (teleport)
         Vector3 newHorizontalVel = Vector3.MoveTowards(
             horizontalVel,
             targetVelocity,
             accelRate * Time.fixedDeltaTime
         );
 
+        // Update lại vận tốc hiện tại
         rb.linearVelocity = new Vector3(newHorizontalVel.x, rb.linearVelocity.y, newHorizontalVel.z);
     }
 
+    // Tạo logic quay cho player
+    // TODO: Tại sao lại luôn set trục Oy là 0f
     [Client]
     private void ApplyRotation()
     {
-        if (isDiving) return;
-
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (horizontalVel.sqrMagnitude < 0.01f) return;
 
+        // Giữ nhân vật đứng thẳng theo trục Oy (Vector3.up)
+        // Nhân vật sẽ quay được trái phải, góc quay không bị nghiêng hay  
+        // Quaternion giải quyết vấn đề gimbal lock (bị mất một trục quay khi rotate 2 trục trùng nhau),
+        // không tạo ra các góc máy quay ngoài quỹ đạo của 3 trục, thay đổi thất thường, ...
         Quaternion targetRot = Quaternion.LookRotation(horizontalVel.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
@@ -433,12 +371,6 @@ public class FallGuysMovement : NetworkBehaviour
     }
 
     [Client]
-    private bool CanDive()
-    {
-        return !isGrounded && !isDiving && Time.time > lastDiveTime + diveCooldown;
-    }
-
-    [Client]
     private void ApplyBetterJumpPhysics()
     {
         if (rb.linearVelocity.y < 0f)
@@ -449,125 +381,6 @@ public class FallGuysMovement : NetworkBehaviour
         {
             rb.linearVelocity += Vector3.up * Physics.gravity.y * (lowJumpMultiplier - 1f) * Time.fixedDeltaTime;
         }
-    }
-
-    // ================= SERVER VALIDATION & RPCs =================
-
-    /// <summary>
-    /// COMMAND: Client requests to jump, server validates and broadcasts effect
-    /// Server can reject if player is not actually grounded
-    /// </summary>
-    [Command]
-    private void CmdRequestJump()
-    {
-        Debug.Log($"[SERVER] Player {netId} requested jump. Grounded: {isGrounded}");
-
-        // SERVER VALIDATION: Is player allowed to jump?
-        // Note: Due to latency, client might think it's grounded but server doesn't
-        // For better feel, we can be lenient here (trust client for jump)
-        // But for competitive games, you'd enforce strict server-side checks
-
-        if (!isGrounded)
-        {
-            // Optional: Reject jump if server thinks player is in air
-            // Debug.LogWarning($"[SERVER] Rejected jump - player {netId} not grounded on server");
-            // return;
-        }
-
-        // Broadcast jump effect to all clients
-        RpcOnJump();
-    }
-
-    /// <summary>
-    /// CLIENT RPC: Play jump effects for all players
-    /// Everyone sees/hears the jump happen
-    /// </summary>
-    [ClientRpc]
-    private void RpcOnJump()
-    {
-        Debug.Log("[RPC-ALL] Playing jump effect");
-
-        // Play particle effect
-        if (jumpParticles != null)
-        {
-            jumpParticles.Play();
-        }
-
-        // Play jump sound
-        if (jumpSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(jumpSound);
-        }
-
-        // Trigger jump animation
-        // GetComponent<Animator>()?.SetTrigger("Jump");
-    }
-
-    /// <summary>
-    /// COMMAND: Client requests to dive, server validates cooldown and broadcasts
-    /// Prevents spam and ensures fair gameplay
-    /// </summary>
-    [Command]
-    private void CmdRequestDive()
-    {
-        Debug.Log($"[SERVER] Player {netId} requested dive");
-
-        // SERVER VALIDATION 1: Is player in air?
-        if (isGrounded)
-        {
-            Debug.LogWarning($"[SERVER] Rejected dive - player {netId} is grounded");
-            return;
-        }
-
-        // SERVER VALIDATION 2: Is cooldown ready?
-        if (isDiving || Time.time < lastDiveTime + diveCooldown)
-        {
-            Debug.LogWarning($"[SERVER] Rejected dive - player {netId} on cooldown");
-            return;
-        }
-
-        // SERVER: Update state (SyncVars will sync to all clients)
-        isDiving = true;
-        lastDiveTime = Time.time;
-
-        // SERVER: Apply dive physics
-        Vector3 diveDir = transform.forward + Vector3.down * 0.3f;
-        diveDir.Normalize();
-
-        Rigidbody serverRb = GetComponent<Rigidbody>();
-        serverRb.linearVelocity = Vector3.zero;
-        serverRb.AddForce(diveDir * diveForce, ForceMode.Impulse);
-        serverRb.AddTorque(Vector3.right * 5f, ForceMode.Impulse);
-
-        Debug.Log($"[SERVER] Dive approved for player {netId}");
-
-        // Broadcast dive effect to all clients
-        RpcOnDive();
-    }
-
-    /// <summary>
-    /// CLIENT RPC: Play dive effects for all players
-    /// Everyone sees the dive animation and effects
-    /// </summary>
-    [ClientRpc]
-    private void RpcOnDive()
-    {
-        Debug.Log("[RPC-ALL] Playing dive effect");
-
-        // Play particle effect (dive trail)
-        if (diveParticles != null)
-        {
-            diveParticles.Play();
-        }
-
-        // Play dive sound
-        if (diveSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(diveSound);
-        }
-
-        // Trigger dive animation
-        // GetComponent<Animator>()?.SetTrigger("Dive");
     }
 
     // ================= DEBUG =================

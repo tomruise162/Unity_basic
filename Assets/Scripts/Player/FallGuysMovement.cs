@@ -53,7 +53,6 @@ public class FallGuysMovement : NetworkBehaviour
 
     // ===== State =====
     private bool isGrounded;
-    private bool wasGrounded;
 
     // ===== Components =====
     private Rigidbody rb;
@@ -61,17 +60,12 @@ public class FallGuysMovement : NetworkBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-
         rb.interpolation = RigidbodyInterpolation.Interpolate;
-        // Sử dụng check collision descrete để máy không phải xử lý liên tục.
-        // Tuy nhiên có những rủi ro trong các game yêu cầu collision chính xác.
-        // Ví dụ: game bắn súng, các game có skill dash/teleport, game đua xe,...
         rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
         rb.freezeRotation = true;
     }
 
     // ================= NETWORK LIFECYCLE =================
-
     public override void OnStartClient()
     {
         base.OnStartClient();
@@ -84,10 +78,6 @@ public class FallGuysMovement : NetworkBehaviour
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
-
-        // Sử dụng Client auhtority với NetworkTransformHybrid
-        // Client gửi position, rotation, lên server
-        // Server sync với các clients khác 
         var networkTransform = GetComponent<Mirror.NetworkTransformHybrid>();
         if (networkTransform == null)
         {
@@ -140,12 +130,12 @@ public class FallGuysMovement : NetworkBehaviour
         }
     }
 
-    // Khi chạm vào coin
     private void OnTriggerEnter(Collider other)
     {
         // Chỉ local player detect collision
         if (!isLocalPlayer) return;
         if (!other.CompareTag("Coin")) return;
+        // if (other.gameObject.layer != LayerMask.NameToLayer("Coin")) return;
 
         // Lấy NetworkIdentity của coin để gửi lên server
         NetworkIdentity coinNi = other.GetComponent<NetworkIdentity>();
@@ -169,27 +159,15 @@ public class FallGuysMovement : NetworkBehaviour
     private void CmdPickupCoin(uint coinNetId)
     {
         Debug.Log($"[SERVER] CmdPickupCoin called by player {netId} for coin {coinNetId}");
-
-        // SERVER VALIDATION 1: Does coin still exist?
         if (!NetworkServer.spawned.TryGetValue(coinNetId, out NetworkIdentity coinNi))
         {
             Debug.Log($"[SERVER] Coin {coinNetId} not found (already collected)");
             return;
         }
 
-        // SERVER VALIDATION 2: Is player close enough to coin?
-        float distance = Vector3.Distance(transform.position, coinNi.transform.position);
-        if (distance > 3f) // Max pickup range
-        {
-            Debug.LogWarning($"[SERVER] Player {netId} too far from coin! Distance: {distance}");
-            return;
-        }
-
-        // SERVER: Grant coin (SyncVar automatically syncs to all clients)
+        //float distance = Vector3.Distance(transform.position, coinNi.transform.position);
         coinCount++;
-        Debug.Log($"[SERVER] Player {netId} collected coin. Total: {coinCount}");
-
-        // SERVER: Destroy coin (Mirror syncs destruction to all clients)
+        Debug.Log($"[SERVER] Player {netId} collected coin {coinNi.netId}. Total: {coinCount}");
         NetworkServer.Destroy(coinNi.gameObject);
     }
 
@@ -199,6 +177,7 @@ public class FallGuysMovement : NetworkBehaviour
     private void Update()
     {
         if (!isLocalPlayer) return;
+        // Check hệ thống mạng của client xem đã kết nối và sẵn sàng chưa
         if (NetworkClient.connection == null || !NetworkClient.ready) return;
 
         ReadInput();
@@ -249,8 +228,8 @@ public class FallGuysMovement : NetworkBehaviour
             camRight = cameraTransform.right;
             camForward.y = 0f;
             camRight.y = 0f;
-            // camForward.Normalize();
-            // camRight.Normalize();
+            camForward.Normalize();
+            camRight.Normalize();
             // Debug.Log("Camera forward: " + camForward);
             // Debug.Log("Camera right: " + camRight);
         }
@@ -304,7 +283,6 @@ public class FallGuysMovement : NetworkBehaviour
         ApplyBetterJumpPhysics();
         Physics.SyncTransforms();
 
-        wasGrounded = isGrounded;
     }
 
     [Client]
@@ -330,18 +308,12 @@ public class FallGuysMovement : NetworkBehaviour
         if (!isGrounded)
             accelRate *= airControlMultiplier;
 
-        // Lấy vận tốc hiện tại
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        // Sử dụng MoveTowards để đưa vận tốc hiện tại tới vận tốc mà ta muốn đạt tới
-        // Thay đổi dần theo mỗi đợt update vật lý (tick của FixedUpdate)
-        // Không thay đổi ngay lập tức (teleport)
         Vector3 newHorizontalVel = Vector3.MoveTowards(
             horizontalVel,
             targetVelocity,
             accelRate * Time.fixedDeltaTime
         );
-
-        // Update lại vận tốc hiện tại
         rb.linearVelocity = new Vector3(newHorizontalVel.x, rb.linearVelocity.y, newHorizontalVel.z);
     }
 
@@ -349,15 +321,11 @@ public class FallGuysMovement : NetworkBehaviour
     // TODO: Tại sao lại luôn set trục Oy là 0f
     [Client]
     private void ApplyRotation()
-    {
+    {   
         Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (horizontalVel.sqrMagnitude < 0.01f) return;
-
-        // Giữ nhân vật đứng thẳng theo trục Oy (Vector3.up)
-        // Nhân vật sẽ quay được trái phải, góc quay không bị nghiêng hay  
-        // Quaternion giải quyết vấn đề gimbal lock (bị mất một trục quay khi rotate 2 trục trùng nhau),
-        // không tạo ra các góc máy quay ngoài quỹ đạo của 3 trục, thay đổi thất thường, ...
         Quaternion targetRot = Quaternion.LookRotation(horizontalVel.normalized, Vector3.up);
+
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
             targetRot,
@@ -388,11 +356,10 @@ public class FallGuysMovement : NetworkBehaviour
     // ================= DEBUG =================
 
     private void OnDrawGizmos()
-    {
+    {   
         Vector3 checkPos = groundCheck != null ? groundCheck.position : transform.position + Vector3.down * 0.1f;
         Gizmos.color = Application.isPlaying && isGrounded ? Color.green : Color.red;
         Gizmos.DrawWireSphere(checkPos, groundCheckRadius);
-
         Gizmos.color = Color.blue;
         Gizmos.DrawRay(transform.position + Vector3.up, transform.forward * 2f);
     }

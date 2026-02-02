@@ -1,19 +1,6 @@
 using UnityEngine;
 using Mirror;
 
-/// <summary>
-/// Fall Guys style Third-Person Camera
-/// 
-/// Dac diem:
-/// - Camera orbit xung quanh player
-/// - Xoay theo chuot (hoac right stick tren controller)
-/// - Co collision de khong xuyen tuong
-/// - Smooth follow player
-/// 
-/// Setup:
-/// - Attach script nay vao Main Camera
-/// - Script se tu tim local player de follow
-/// </summary>
 public class FallGuysCamera : MonoBehaviour
 {
     [Header("Target")]
@@ -35,10 +22,9 @@ public class FallGuysCamera : MonoBehaviour
 
     [Header("Smoothing")]
     [SerializeField] private float positionSmoothTime = 0.1f;
-    [SerializeField] private float rotationSmoothTime = 0.05f;
 
     [Header("Collision")]
-    [SerializeField] private LayerMask collisionMask = ~0;
+    [SerializeField] private LayerMask collisionMask = ~1;
     [SerializeField] private float collisionRadius = 0.3f;
 
     // Current angles
@@ -48,45 +34,25 @@ public class FallGuysCamera : MonoBehaviour
     // Smoothing
     private Vector3 currentVelocity;
 
-    // Singleton for easy access
-    public static FallGuysCamera Instance { get; private set; }
-
-    // Public property de lay huong camera (dung cho movement)
-    public Vector3 Forward => new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
-    public Vector3 Right => new Vector3(transform.right.x, 0f, transform.right.z).normalized;
-
     // Trang thai hoat dong - chi hoat dong sau khi co player
     private bool isActive = false;
 
-    private void Awake()
-    {
-        Instance = this;
-    }
-
+    private bool isGameActive = true;
     private void Start()
     {
-        // KHONG lock cursor o day - de nguoi dung click HUD truoc
-        // Cursor se duoc lock sau khi tim thay local player
     }
 
     private void LateUpdate()
     {
-        // Kiem tra Escape de unlock cursor (mo menu)
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            ToggleCursorLock();
-        }
-
         // Tu dong tim target neu chua co
         if (target == null)
         {
             FindLocalPlayer();
             return;
         }
-
+        ToggleCursorLock(); 
         // Chi xu ly camera khi da active
-        if (!isActive) return;
-
+        if (!isActive || !isGameActive) return;
         HandleRotationInput();
         UpdateCameraPosition();
     }
@@ -166,23 +132,21 @@ public class FallGuysCamera : MonoBehaviour
     /// Toggle cursor lock (goi khi can mo menu)
     /// </summary>
     public void ToggleCursorLock()
-    {
-        if (Cursor.lockState == CursorLockMode.Locked)
+    {   
+        if (Input.GetKeyDown(KeyCode.Escape) && isGameActive)
         {
+            Debug.Log("Toggling cursor lock: " + Cursor.lockState);
+            isGameActive = false;
             Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            Cursor.visible = true;  
         }
-        else
+
+        else if (Input.GetMouseButtonDown(0) && !isGameActive)
         {
+            Debug.Log("Toggling cursor lock: " + Cursor.lockState);
+            isGameActive = true;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
-    }
-
-    private void OnDestroy()
-    {
-        // Unlock cursor khi destroy
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
     }
 }

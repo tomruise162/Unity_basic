@@ -56,13 +56,10 @@ public class SimpleNetworkManager : NetworkManager
         Debug.Log("[SERVER] Server stopped!");
     }
 
-    /// <summary>
     /// QUAN TRONG: Đây là nơi SERVER spawn player cho client.
     /// 
     /// Khi client gọi NetworkClient.AddPlayer(), message được gửi tới server,
     /// và server gọi function này để tạo player object.
-    /// </summary>
-    /// <param name="conn">Connection của client đang request spawn</param>
     public override void OnServerAddPlayer(NetworkConnectionToClient conn)
     {
         // Bước 1: Xác định vị trí spawn
@@ -87,14 +84,13 @@ public class SimpleNetworkManager : NetworkManager
         Debug.Log($"[SERVER] Player spawned successfully! NetId: {playerObject.GetComponent<NetworkIdentity>().netId}");
     }
 
-    /// <summary>
-    /// Tính toán vị trí spawn dựa trên connectionId
-    /// </summary>
+    // Tính toán vị trí spawn dựa trên connectionId
     private Vector3 GetSpawnPosition(int connectionId)
     {
         if (spawnPoints == null || spawnPoints.Length == 0)
         {
-            // Spawn tại vị trí ngẫu nhiên nếu không có spawn points
+            // Spawn tại vị trí ngẫu nhiên nếu không có spawn points (theo x và z) 
+            // y luôn để là 1 để không bị spawn quá cao hoặc bị chìm xuống
             return new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f));
         }
 
@@ -103,19 +99,15 @@ public class SimpleNetworkManager : NetworkManager
         return spawnPoints[index].position;
     }
 
-    /// <summary>
-    /// Gọi khi một client connect tới server
-    /// </summary>
+    // Gọi khi một client connect tới server
     public override void OnServerConnect(NetworkConnectionToClient conn)
     {
         base.OnServerConnect(conn);
         Debug.Log($"[SERVER] Client connected! ConnectionId: {conn.connectionId}");
     }
 
-    /// <summary>
-    /// Gọi khi một client disconnect khỏi server
-    /// Player object sẽ tự động bị destroy
-    /// </summary>
+    // Gọi khi một client disconnect khỏi server
+    // Player object sẽ tự động bị destroy
     public override void OnServerDisconnect(NetworkConnectionToClient conn)
     {
         Debug.Log($"[SERVER] Client disconnected! ConnectionId: {conn.connectionId}");
@@ -126,20 +118,17 @@ public class SimpleNetworkManager : NetworkManager
     // CLIENT EVENTS
     // =================================================================
 
-    /// <summary>
-    /// Gọi khi client bắt đầu (bao gồm cả Host client)
-    /// </summary>
+
+    // Gọi khi client bắt đầu (bao gồm cả Host client)
     public override void OnStartClient()
     {
         base.OnStartClient();
         Debug.Log("[CLIENT] Client started!");
     }
 
-    /// <summary>
-    /// Gọi khi client connect tới server thành công
-    /// Sau bước này, Mirror sẽ tự động gọi NetworkClient.Ready() 
-    /// và NetworkClient.AddPlayer() (nếu autoCreatePlayer = true)
-    /// </summary>
+    // Gọi khi client connect tới server thành công
+    // Sau bước này, Mirror sẽ tự động gọi NetworkClient.Ready() 
+    // và NetworkClient.AddPlayer() (nếu autoCreatePlayer = true)
     public override void OnClientConnect()
     {
         base.OnClientConnect();
@@ -154,18 +143,14 @@ public class SimpleNetworkManager : NetworkManager
         // NetworkClient.AddPlayer();
     }
 
-    /// <summary>
-    /// Gọi khi client disconnect khỏi server
-    /// </summary>
+    // Gọi khi client disconnect khỏi server
     public override void OnClientDisconnect()
     {
         base.OnClientDisconnect();
         Debug.Log("[CLIENT] Disconnected from server!");
     }
 
-    /// <summary>
-    /// Gọi khi client dừng
-    /// </summary>
+    // Gọi khi client dừng
     public override void OnStopClient()
     {
         base.OnStopClient();

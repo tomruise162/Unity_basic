@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 5693310348008720758}
   - component: {fileID: 822403597872660822}
   - component: {fileID: 2032970469024525095}
-  - component: {fileID: 8831643101765257270}
+  - component: {fileID: 6382411916632002795}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -192,7 +192,7 @@ MonoBehaviour:
   showGizmos: 0
   showOverlay: 0
   overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
---- !u!114 &8831643101765257270
+--- !u!114 &6382411916632002795
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -201,7 +201,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 3982184379949828128}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cf0efd44d7be8db4086970558eb40424, type: 3}
+  m_Script: {fileID: 11500000, guid: 4078223ce7fe1bf46baa6ed80abfd14b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   syncDirection: 0
@@ -212,25 +212,18 @@ MonoBehaviour:
   deceleration: 40
   airControlMultiplier: 0.4
   rotationSpeed: 720
-  jumpForce: 8
+  jumpForce: 6
+  jumpBufferTime: 0.3
+  coyoteTime: 0.15
   groundCheck: {fileID: 3940160918648426485}
-  groundCheckRadius: 0.25
+  groundCheckRadius: 0.3
   groundMask:
     serializedVersion: 2
     m_Bits: 128
-  jumpBufferTime: 0.3
-  coyoteTime: 0.1
-  diveForce: 12
-  diveCooldown: 1
-  fallMultiplier: 2.5
+  jumpFallMultiplier: 2.5
   lowJumpMultiplier: 2
   cameraTransform: {fileID: 0}
   coinCount: 0
-  jumpParticles: {fileID: 0}
-  diveParticles: {fileID: 0}
-  jumpSound: {fileID: 0}
-  diveSound: {fileID: 0}
-  coinSound: {fileID: 0}
 --- !u!1 &5429438196211973985
 GameObject:
   m_ObjectHideFlags: 0
